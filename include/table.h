@@ -17,7 +17,6 @@ typedef struct {
 #define MAX_COLUMNS 32
 
 typedef struct {
-    char name[32];
     uint32_t num_columns;
     Column columns[MAX_COLUMNS];
 } TableSchema;
@@ -44,7 +43,6 @@ typedef struct {
     TableSchema schema;
     void* pages[TABLE_MAX_PAGES];
     uint32_t num_rows;
-    uint32_t column_number;
 } Table;
 
 void free_table(Table* table);

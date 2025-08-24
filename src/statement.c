@@ -12,6 +12,9 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     if (strncmp(input_buffer->buffer, "insert into", 11) == 0) {
         statement->type = STATEMENT_INSERT;
 
+        Table* table = find_table(&global_db, statement->table_name);
+        uint32_t column_number = table->schema.num_columns;
+
         char* start = input_buffer->buffer + 11;
         sscanf(start, "%31s", statement->table_name);
         char* open_paren = strchr(input_buffer->buffer, '(');
@@ -22,13 +25,28 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         strncpy(column_definitions, open_paren + 1, close_paren - open_paren - 1);
         column_definitions[close_paren - open_paren - 1] = '\0';
 
-        Table* table = find_table(&global_db, statement->table_name);
+        NewRow* row = create_row(&table->schema);
+
 
         char* token = strtok(column_definitions, ",");
 
-        u_int32_t col_num = 0;
+        int column_index = 0;
+        while (token != NULL && column_index < table->schema.num_columns) {
+            ColumnType type = table->schema.columns[column_index].type;
 
-        while (token != NULL && col_num < statement->num_columns) {}
+            if (type == COLUMN_INT) {
+                char *endptr;
+                long value = strtol(token, &endptr, 10);
+                if (*endptr != '\0') {
+                    return PREPARE_SYNTAX_ERROR;
+                }
+                set_int_value(&table->schema, row, column_index, (int32_t)value);
+            } else if (type == COLUMN_TEXT) {
+                set_text_value(&table->schema, row, column_index, token);
+            }
+
+            token = strtok(NULL, ",");
+        }
 
         int args_assigned = sscanf(
             input_buffer->buffer, "insert %d %31s %254s",
@@ -172,7 +190,7 @@ ExecuteResult execute_create_table(Statement* statement) {
         return EXECUTE_FAIL;
     }
 
-    strncpy(new_table->schema.name, statement->table_name, sizeof(new_table->schema.name));
+    strncpy(new_table->name, statement->table_name, sizeof(new_table->name));
     new_table->schema.num_columns = statement->num_columns;
     for (int i = 0; i < statement->num_columns; i++) {
         new_table->schema.columns[i] = statement->columns[i];
@@ -186,7 +204,7 @@ ExecuteResult execute_create_table(Statement* statement) {
     }
 
     printf("Table '%s' created with %d columns.\n",
-           new_table->schema.name, new_table->schema.num_columns);
+           new_table->name, new_table->schema.num_columns);
     return EXECUTE_SUCCESS;
 }
 

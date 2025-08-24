@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
             }
 
 
-        switch (execute_statement(&statement, table)) {
+        switch (execute_statement(&statement)) {
             case (EXECUTE_SUCCESS):
                 printf("Executed.\n");
                 break;
