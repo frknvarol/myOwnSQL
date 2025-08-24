@@ -4,6 +4,8 @@
 #include "input_buffer.h"
 #include "meta_command.h"
 #include "statement.h"
+#include "table.h"
+#include "schema.h"
 
 
 void print_prompt() { printf("db > "); }
@@ -36,12 +38,12 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-        //execute_statement(&statement, table);
+
         switch (execute_statement(&statement, table)) {
             case (EXECUTE_SUCCESS):
                 printf("Executed.\n");
                 break;
-            case (EXECUTE_TABLE_FULL):
+            case (EXECUTE_FAIL):
                 printf("Error: Table full.\n");
                 break;
             }

@@ -3,11 +3,13 @@
 
 #include <stdint.h>
 #include "input_buffer.h"
+#include "table.h"
 
 
 typedef enum {
     STATEMENT_INSERT,
-    STATEMENT_SELECT
+    STATEMENT_SELECT,
+    STATEMENT_CREATE_TABLE
 }StatementType;
 
 
@@ -38,19 +40,18 @@ extern const uint32_t TABLE_MAX_ROWS;
 
 typedef struct {
     StatementType type;
-    Row row_to_insert;
+    char table_name[32];
+    uint32_t num_columns;
+    char column_names[32][32];
+    char column_types[32][16];
+    Row row;
+    Column columns[MAX_COLUMNS];
+
 } Statement;
 
 void serialize_row(Row* source, void* destination);
 void deserialize_row(void* source, Row* destination);
 
-
-typedef struct {
-    uint32_t num_rows;
-    void* pages[TABLE_MAX_PAGES];
-} Table;
-
-void* row_slot(Table* table, uint32_t row_num);
 
 
 typedef enum {
@@ -61,14 +62,15 @@ typedef enum {
 
 typedef enum {
     EXECUTE_SUCCESS,
-    EXECUTE_TABLE_FULL
+    EXECUTE_FAIL
 }ExecuteResult;
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
 ExecuteResult execute_statement(Statement* statement, Table* table);
 ExecuteResult execute_insert(Statement* statement, Table* table);
 ExecuteResult execute_select(Statement* statement, Table* table);
+ExecuteResult execute_create_table(Statement* statement);
 void print_row(Row* row);
-Table* new_table();
+
 
 #endif
