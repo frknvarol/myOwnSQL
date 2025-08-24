@@ -46,12 +46,10 @@ typedef struct {
     char column_types[32][16];
     Row row;
     Column columns[MAX_COLUMNS];
-
 } Statement;
 
 void serialize_row(Row* source, void* destination);
 void deserialize_row(void* source, Row* destination);
-
 
 
 typedef enum {
@@ -66,11 +64,13 @@ typedef enum {
 }ExecuteResult;
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
-ExecuteResult execute_statement(Statement* statement, Table* table);
-ExecuteResult execute_insert(Statement* statement, Table* table);
-ExecuteResult execute_select(Statement* statement, Table* table);
+ExecuteResult execute_statement(Statement* statement);
+ExecuteResult execute_insert(Statement* statement);
+ExecuteResult execute_select(Statement* statement);
 ExecuteResult execute_create_table(Statement* statement);
 void print_row(Row* row);
+
+
 
 
 #endif

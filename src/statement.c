@@ -4,10 +4,32 @@
 #include "statement.h"
 #include "input_buffer.h"
 #include "table.h"
+#include "database.h"
+
+Database global_db;
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement) {
-    if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
+    if (strncmp(input_buffer->buffer, "insert into", 11) == 0) {
         statement->type = STATEMENT_INSERT;
+
+        char* start = input_buffer->buffer + 11;
+        sscanf(start, "%31s", statement->table_name);
+        char* open_paren = strchr(input_buffer->buffer, '(');
+        char* close_paren = strchr(input_buffer->buffer, ')');
+        if (!open_paren || !close_paren) return PREPARE_SYNTAX_ERROR;
+
+        char column_definitions[256];
+        strncpy(column_definitions, open_paren + 1, close_paren - open_paren - 1);
+        column_definitions[close_paren - open_paren - 1] = '\0';
+
+        Table* table = find_table(&global_db, statement->table_name);
+
+        char* token = strtok(column_definitions, ",");
+
+        u_int32_t col_num = 0;
+
+        while (token != NULL && col_num < statement->num_columns) {}
+
         int args_assigned = sscanf(
             input_buffer->buffer, "insert %d %31s %254s",
             &statement->row.id,
@@ -22,6 +44,8 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
     if (strncmp(input_buffer->buffer, "select", 6) == 0) {
         statement->type = STATEMENT_SELECT;
+        char* start = input_buffer->buffer + 6;
+        sscanf(start, "%31s", statement->table_name);
         return PREPARE_SUCCESS;
     }
 
@@ -107,19 +131,21 @@ void* row_slot(Table* table, uint32_t row_num) {
     return (char*)page + byte_offset;
 }
 
-ExecuteResult execute_statement(Statement* statement, Table* table) {
+ExecuteResult execute_statement(Statement* statement) {
     switch (statement->type) {
         case STATEMENT_INSERT:
-            return execute_insert(statement, table);
+            return execute_insert(statement);
         case STATEMENT_SELECT:
-            return execute_select(statement, table);
+            return execute_select(statement);
         case STATEMENT_CREATE_TABLE:
             return execute_create_table(statement);
     }
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_insert(Statement* statement, Table* table) {
+ExecuteResult execute_insert(Statement* statement) {
+    Table* table = find_table(&global_db, statement->table_name);
+
     if (table->num_rows >= TABLE_MAX_ROWS) {
         return EXECUTE_FAIL;
     }
@@ -129,7 +155,8 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_select(Statement* statement, Table* table) {
+ExecuteResult execute_select(Statement* statement) {
+    Table* table = find_table(&global_db, statement->table_name);
     Row row;
     for (uint32_t i = 0; i < table->num_rows; i++) {
         deserialize_row(row_slot(table, i), &row);
@@ -153,10 +180,13 @@ ExecuteResult execute_create_table(Statement* statement) {
 
     new_table->num_rows = 0;
 
+    if (add_table(&global_db, new_table) != 0) {
+        free(new_table);
+        return EXECUTE_FAIL;
+    }
 
     printf("Table '%s' created with %d columns.\n",
            new_table->schema.name, new_table->schema.num_columns);
-    free_table(new_table);
     return EXECUTE_SUCCESS;
 }
 

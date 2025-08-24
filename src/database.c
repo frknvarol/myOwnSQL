@@ -19,7 +19,7 @@ Table* find_table(Database* db, const char* table_name) {
             return db->tables[i];
         }
     }
-    return NULL; // not found
+    return NULL;
 }
 
 int add_table(Database* db, Table* table) {
