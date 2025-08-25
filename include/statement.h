@@ -13,28 +13,13 @@ typedef enum {
 }StatementType;
 
 
-#define COLUMN_USERNAME_SIZE 32
-#define COLUMN_EMAIL_SIZE 255
+#define PAGE_SIZE 4096
+#define TABLE_MAX_PAGES 100
 
-typedef struct {
-    uint32_t id;
-    char username[COLUMN_USERNAME_SIZE];
-    char email[COLUMN_EMAIL_SIZE];
-}Row;
+#define ROW_SIZE sizeof(Row)
+#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
+#define TABLE_MAX_ROWS (ROWS_PER_PAGE * TABLE_MAX_PAGES)
 
-#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
-
-extern const uint32_t ID_SIZE;
-extern const uint32_t USERNAME_SIZE;
-extern const uint32_t EMAIL_SIZE;
-extern const uint32_t ID_OFFSET;
-extern const uint32_t USERNAME_OFFSET;
-extern const uint32_t EMAIL_OFFSET;
-extern const uint32_t ROW_SIZE;
-
-extern const uint32_t PAGE_SIZE;
-extern const uint32_t ROWS_PER_PAGE;
-extern const uint32_t TABLE_MAX_ROWS;
 
 #define TABLE_MAX_PAGES 100
 
@@ -48,8 +33,8 @@ typedef struct {
     Column columns[MAX_COLUMNS];
 } Statement;
 
-void serialize_row(Row* source, void* destination);
-void deserialize_row(void* source, Row* destination);
+void serialize_row(const TableSchema* schema, Row* source, void* destination);
+void deserialize_row(const TableSchema* schema, void* source, Row* destination);
 
 
 typedef enum {
@@ -68,7 +53,7 @@ ExecuteResult execute_statement(Statement* statement);
 ExecuteResult execute_insert(Statement* statement);
 ExecuteResult execute_select(Statement* statement);
 ExecuteResult execute_create_table(Statement* statement);
-void print_row(Row* row);
+void print_row(const TableSchema* schema, Row* row);
 
 
 

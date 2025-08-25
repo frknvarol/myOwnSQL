@@ -11,7 +11,6 @@
 void print_prompt() { printf("db > "); }
 
 int main(int argc, char* argv[]) {
-    Table* table = new_table();
     InputBuffer* input_buffer = new_input_buffer();
     while (true) {
         print_prompt();
@@ -44,7 +43,7 @@ int main(int argc, char* argv[]) {
                 printf("Executed.\n");
                 break;
             case (EXECUTE_FAIL):
-                printf("Error: Table full.\n");
+                printf("Error.\n");
                 break;
             }
     }

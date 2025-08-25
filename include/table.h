@@ -25,15 +25,15 @@ size_t compute_row_size(const TableSchema* schema);
 
 typedef struct {
     uint8_t* data;
-} NewRow;
+} Row;
 
 
-NewRow* create_row(const TableSchema* schema);
+Row* create_row(const TableSchema* schema);
 
 size_t get_column_offset(const TableSchema* schema, int col_index);
 
-void set_int_value(const TableSchema* schema, NewRow* row, int col_index, int32_t value);
-void set_text_value(const TableSchema* schema, NewRow* row, int col_index, const char* text);
+void set_int_value(const TableSchema* schema, Row* row, int col_index, int32_t value);
+void set_text_value(const TableSchema* schema, Row* row, int col_index, const char* text);
 
 
 #define TABLE_MAX_PAGES 100

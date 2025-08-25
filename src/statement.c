@@ -8,12 +8,13 @@
 
 Database global_db;
 
+
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement) {
     if (strncmp(input_buffer->buffer, "insert into", 11) == 0) {
         statement->type = STATEMENT_INSERT;
 
         Table* table = find_table(&global_db, statement->table_name);
-        uint32_t column_number = table->schema.num_columns;
+
 
         char* start = input_buffer->buffer + 11;
         sscanf(start, "%31s", statement->table_name);
@@ -25,7 +26,8 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         strncpy(column_definitions, open_paren + 1, close_paren - open_paren - 1);
         column_definitions[close_paren - open_paren - 1] = '\0';
 
-        NewRow* row = create_row(&table->schema);
+        Row* row = create_row(&table->schema);
+        statement->row = *row;
 
 
         char* token = strtok(column_definitions, ",");
@@ -33,6 +35,11 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         int column_index = 0;
         while (token != NULL && column_index < table->schema.num_columns) {
             ColumnType type = table->schema.columns[column_index].type;
+
+            while (*token == ' ' || *token == '\t') token++;
+            char* end = token + strlen(token) - 1;
+            while (end > token && (*end == ' ' || *end == '\t')) *end-- = '\0';
+
 
             if (type == COLUMN_INT) {
                 char *endptr;
@@ -46,17 +53,10 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             }
 
             token = strtok(NULL, ",");
+            column_index += 1;
         }
 
-        int args_assigned = sscanf(
-            input_buffer->buffer, "insert %d %31s %254s",
-            &statement->row.id,
-            statement->row.username,
-            statement->row.email
-        );
-        if (args_assigned < 3) {
-            return PREPARE_SYNTAX_ERROR;
-        }
+
         return PREPARE_SUCCESS;
     }
 
@@ -114,40 +114,48 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-const uint32_t ID_SIZE = size_of_attribute(Row, id);
-const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
-const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
-const uint32_t ID_OFFSET = 0;
-const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
-const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
-const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
-const uint32_t PAGE_SIZE = 4096;
-const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
-const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
-
-void serialize_row(Row* source, void* destination) {
-    memcpy((char*)destination + ID_OFFSET, &(source->id), ID_SIZE);
-    memcpy((char*)destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-    memcpy((char*)destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+void serialize_row(const TableSchema* schema, Row* source, void* destination) {
+    size_t offset = 0;
+    for (int i = 0; i < schema->num_columns; i++) {
+        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
+        memcpy((char*)destination + offset, source->data + offset, col_size);
+        offset += col_size;
+    }
 }
 
-void deserialize_row(void* source, Row* destination) {
-    memcpy(&(destination->id), (char*)source + ID_OFFSET, ID_SIZE);
-    memcpy(&(destination->username), (char*)source + USERNAME_OFFSET, USERNAME_SIZE);
-    memcpy(&(destination->email), (char*)source + EMAIL_OFFSET, EMAIL_SIZE);
+void deserialize_row(const TableSchema* schema, void* source, Row* destination) {
+    size_t offset = 0;
+    for (int i = 0; i < schema->num_columns; i++) {
+        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
+        memcpy(destination->data + offset, (char*)source + offset, col_size);
+        offset += col_size;
+    }
 }
+
 
 void* row_slot(Table* table, uint32_t row_num) {
-    uint32_t page_num = row_num / ROWS_PER_PAGE;
-    void* page = table->pages[page_num];
-    if (page == NULL) {
-        page = table->pages[page_num] = malloc(PAGE_SIZE);
+    size_t row_size = compute_row_size(&table->schema);
+    size_t rows_per_page = PAGE_SIZE / row_size;
+
+    size_t page_num = row_num / rows_per_page;
+    if (table->pages[page_num] == NULL) {
+        table->pages[page_num] = malloc(PAGE_SIZE);
+        if (!table->pages[page_num]) {
+            perror("malloc failed");
+            exit(1);
+        }
     }
-    uint32_t row_offset = row_num % ROWS_PER_PAGE;
-    uint32_t byte_offset = row_offset * ROW_SIZE;
+    void* page = table->pages[page_num];
+
+
+    size_t row_offset = row_num % rows_per_page;
+    size_t byte_offset = row_offset * row_size;
     return (char*)page + byte_offset;
 }
+
+
+
 
 ExecuteResult execute_statement(Statement* statement) {
     switch (statement->type) {
@@ -167,19 +175,25 @@ ExecuteResult execute_insert(Statement* statement) {
     if (table->num_rows >= TABLE_MAX_ROWS) {
         return EXECUTE_FAIL;
     }
+
     Row* row_to_insert = &(statement->row);
-    serialize_row(row_to_insert, row_slot(table, table->num_rows));
+    void* destination = row_slot(table, table->num_rows);
+
+    serialize_row(&table->schema, row_to_insert, destination);
     table->num_rows += 1;
+
     return EXECUTE_SUCCESS;
 }
 
 ExecuteResult execute_select(Statement* statement) {
     Table* table = find_table(&global_db, statement->table_name);
     Row row;
+    row.data = malloc(compute_row_size(&table->schema));
     for (uint32_t i = 0; i < table->num_rows; i++) {
-        deserialize_row(row_slot(table, i), &row);
-        print_row(&row);
+        deserialize_row(&table->schema, row_slot(table, i), &row);
+        print_row(&table->schema, &row);
     }
+    free(row.data);
     return EXECUTE_SUCCESS;
 }
 
@@ -209,9 +223,24 @@ ExecuteResult execute_create_table(Statement* statement) {
 }
 
 
-void print_row(Row* row) {
-    printf("(%d, %s, %s)\n", row->id, row->username, row->email);
+void print_row(const TableSchema* schema, Row* row) {
+    printf("(");
+    for (int i = 0; i < schema->num_columns; i++) {
+        if (i > 0) printf(", ");
+        if (schema->columns[i].type == COLUMN_INT) {
+            int32_t val;
+            memcpy(&val, row->data + get_column_offset(schema, i), sizeof(int32_t));
+            printf("%d", val);
+        } else if (schema->columns[i].type == COLUMN_TEXT){
+            char buf[257];
+            memcpy(buf, row->data + get_column_offset(schema, i), 256);
+            buf[256] = '\0';
+            printf("%s", buf);
+        }
+    }
+    printf(")\n");
 }
+
 
 
 
