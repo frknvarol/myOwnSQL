@@ -27,8 +27,6 @@ typedef struct {
     StatementType type;
     char table_name[32];
     uint32_t num_columns;
-    char column_names[32][32];
-    char column_types[32][16];
     Row row;
     Column columns[MAX_COLUMNS];
 } Statement;

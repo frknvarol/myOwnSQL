@@ -5,11 +5,13 @@
 #include "input_buffer.h"
 #include "table.h"
 #include "database.h"
+#include "lexer.h"
 
 Database global_db;
 
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement) {
+    /*
     if (strncmp(input_buffer->buffer, "insert into", 11) == 0) {
         statement->type = STATEMENT_INSERT;
 
@@ -64,6 +66,65 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         statement->type = STATEMENT_SELECT;
         char* start = input_buffer->buffer + 6;
         sscanf(start, "%31s", statement->table_name);
+        return PREPARE_SUCCESS;
+    }
+    */
+    Lexer lexer;
+    init_lexer(&lexer, input_buffer->buffer);
+    Token token = next_token(&lexer);
+
+    if (token.type == TOKEN_INSERT) {
+        Token into = next_token(&lexer);
+        if (into.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
+
+        Token table_token = next_token(&lexer);
+        if (table_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+        strncpy(statement->table_name, table_token.text, sizeof(statement->table_name));
+
+        Table* table = find_table(&global_db, table_token.text);
+        Row* row = create_row(&table->schema);
+        statement->row = *row;
+
+
+        // Expect VALUES (...)
+        Token values = next_token(&lexer);
+        if (values.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
+
+        Token open_paren = next_token(&lexer);
+        if (open_paren.type != TOKEN_UNKNOWN || strcmp(open_paren.text, "(") != 0)
+            return PREPARE_SYNTAX_ERROR;
+
+        // Parse values until ')'
+        int col_index = 0;
+        while (1) {
+            Token val = next_token(&lexer);
+            if (val.type == TOKEN_NUMBER) {
+                set_int_value(&table->schema, &statement->row, col_index, atoi(val.text));
+            } else if (val.type == TOKEN_STRING) {
+                set_text_value(&table->schema, &statement->row, col_index, val.text);
+            } else {
+                return PREPARE_SYNTAX_ERROR;
+            }
+            col_index++;
+
+            Token next = next_token(&lexer);
+            if (strcmp(next.text, ")") == 0) break; // end of values
+            if (next.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+        }
+
+        statement->type = STATEMENT_INSERT;
+        return PREPARE_SUCCESS;
+    }
+
+    if (token.type == TOKEN_SELECT) {
+        Token col = next_token(&lexer); // e.g. '*' or column
+        Token from = next_token(&lexer);
+        if (from.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
+
+        Token table = next_token(&lexer);
+        strncpy(statement->table_name, table.text, sizeof(statement->table_name));
+
+        statement->type = STATEMENT_SELECT;
         return PREPARE_SUCCESS;
     }
 

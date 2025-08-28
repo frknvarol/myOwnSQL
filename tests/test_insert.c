@@ -5,7 +5,8 @@
 #include <_string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unity.h>
+#include <CUnit/Basic.h>
+#include <CUnit/CUnit.h>
 
 
 void setUp(void) {
