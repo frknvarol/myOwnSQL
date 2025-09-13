@@ -38,7 +38,8 @@ void deserialize_row(const TableSchema* schema, void* source, Row* destination);
 typedef enum {
     PREPARE_SUCCESS,
     PREPARE_UNRECOGNIZED_STATEMENT,
-    PREPARE_SYNTAX_ERROR
+    PREPARE_SYNTAX_ERROR,
+    PREPARE_INSERT_TYPE_ERROR
 } PrepareResult;
 
 typedef enum {

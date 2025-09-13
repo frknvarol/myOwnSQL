@@ -82,11 +82,11 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         strncpy(statement->table_name, table_token.text, sizeof(statement->table_name));
 
         Table* table = find_table(&global_db, table_token.text);
+        TableSchema schema = table->schema;
         Row* row = create_row(&table->schema);
         statement->row = *row;
 
 
-        // Expect VALUES (...)
         Token values = next_token(&lexer);
         if (values.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
 
@@ -94,17 +94,32 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         if (open_paren.type != TOKEN_UNKNOWN || strcmp(open_paren.text, "(") != 0)
             return PREPARE_SYNTAX_ERROR;
 
-        // Parse values until ')'
+
         int col_index = 0;
         while (1) {
             Token val = next_token(&lexer);
-            if (val.type == TOKEN_NUMBER) {
-                set_int_value(&table->schema, &statement->row, col_index, atoi(val.text));
-            } else if (val.type == TOKEN_STRING) {
-                set_text_value(&table->schema, &statement->row, col_index, val.text);
-            } else {
-                return PREPARE_SYNTAX_ERROR;
+
+            ColumnType column_type = schema.columns[col_index].type;
+
+            switch (column_type) {
+                case COLUMN_INT:
+                    char *endptr;
+                    long int num;
+
+                    num = strtol(val.text, &endptr, 10);
+                    if (endptr == val.text || *endptr != '\0' || val.type != TOKEN_NUMBER) {
+                        return PREPARE_INSERT_TYPE_ERROR;
+                    }
+                    set_int_value(&table->schema, &statement->row, col_index, (int32_t)num);
+                    break;
+                case COLUMN_TEXT:
+                    if (val.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
+                    set_text_value(&table->schema, &statement->row, col_index, val.text);
+                    break;
+                default:
+                    return PREPARE_SYNTAX_ERROR;
             }
+
             col_index++;
 
             Token next = next_token(&lexer);
