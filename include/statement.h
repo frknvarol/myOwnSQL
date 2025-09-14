@@ -39,7 +39,8 @@ typedef enum {
     PREPARE_SUCCESS,
     PREPARE_UNRECOGNIZED_STATEMENT,
     PREPARE_SYNTAX_ERROR,
-    PREPARE_INSERT_TYPE_ERROR
+    PREPARE_INSERT_TYPE_ERROR,
+    PREPARE_INSERT_VARCHAR_SIZE_ERROR
 } PrepareResult;
 
 typedef enum {
@@ -51,8 +52,9 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 ExecuteResult execute_statement(Statement* statement);
 ExecuteResult execute_insert(Statement* statement);
 ExecuteResult execute_select(Statement* statement);
-ExecuteResult execute_create_table(Statement* statement);
-void print_row(const TableSchema* schema, Row* row);
+ExecuteResult execute_create_table(const Statement* statement);
+void print_row(const TableSchema* schema, const Row* row);
+char* find_close_parenthesis(char* open_parenthesis);
 
 
 

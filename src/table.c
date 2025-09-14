@@ -9,8 +9,8 @@ size_t compute_row_size(const TableSchema* schema) {
     for (int i = 0; i < schema->num_columns; i++) {
         if (schema->columns[i].type == COLUMN_INT) {
             size += sizeof(int32_t);
-        } else if (schema->columns[i].type == COLUMN_TEXT) {
-            size += 256;
+        } else if (schema->columns[i].type == COLUMN_VARCHAR) {
+            size += schema->columns[i].size;
         }
     }
     return size;
@@ -32,8 +32,8 @@ size_t get_column_offset(const TableSchema* schema, int col_index) {
             case COLUMN_INT:
                 offset += sizeof(int32_t);
                 break;
-            case COLUMN_TEXT:
-                offset += 256;
+            case COLUMN_VARCHAR:
+                offset += schema->columns[i].size;
                 break;
         }
     }

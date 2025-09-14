@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "statement.h"
+
+#include <stdbool.h>
+
 #include "input_buffer.h"
 #include "table.h"
 #include "database.h"
@@ -71,35 +74,35 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     */
     Lexer lexer;
     init_lexer(&lexer, input_buffer->buffer);
-    Token token = next_token(&lexer);
+    const Token token = next_token(&lexer);
 
     if (token.type == TOKEN_INSERT) {
-        Token into = next_token(&lexer);
+        const Token into = next_token(&lexer);
         if (into.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
 
         Token table_token = next_token(&lexer);
         if (table_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
         strncpy(statement->table_name, table_token.text, sizeof(statement->table_name));
 
-        Table* table = find_table(&global_db, table_token.text);
-        TableSchema schema = table->schema;
-        Row* row = create_row(&table->schema);
+        const Table* table = find_table(&global_db, table_token.text);
+        const TableSchema schema = table->schema;
+        const Row* row = create_row(&table->schema);
         statement->row = *row;
 
 
-        Token values = next_token(&lexer);
+        const Token values = next_token(&lexer);
         if (values.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
 
-        Token open_paren = next_token(&lexer);
+        const Token open_paren = next_token(&lexer);
         if (open_paren.type != TOKEN_UNKNOWN || strcmp(open_paren.text, "(") != 0)
             return PREPARE_SYNTAX_ERROR;
 
 
         int col_index = 0;
         while (1) {
-            Token val = next_token(&lexer);
+            const Token val = next_token(&lexer);
 
-            ColumnType column_type = schema.columns[col_index].type;
+            const ColumnType column_type = schema.columns[col_index].type;
 
             switch (column_type) {
                 case COLUMN_INT:
@@ -112,8 +115,9 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                     }
                     set_int_value(&table->schema, &statement->row, col_index, (int32_t)num);
                     break;
-                case COLUMN_TEXT:
+                case COLUMN_VARCHAR:
                     if (val.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
+                    if (schema.columns[col_index].size < strlen(val.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
                     set_text_value(&table->schema, &statement->row, col_index, val.text);
                     break;
                 default:
@@ -122,7 +126,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
             col_index++;
 
-            Token next = next_token(&lexer);
+            const Token next = next_token(&lexer);
             if (strcmp(next.text, ")") == 0) break; // end of values
             if (next.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
         }
@@ -133,10 +137,10 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
     if (token.type == TOKEN_SELECT) {
         Token col = next_token(&lexer); // e.g. '*' or column
-        Token from = next_token(&lexer);
+        const Token from = next_token(&lexer);
         if (from.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
 
-        Token table = next_token(&lexer);
+        const Token table = next_token(&lexer);
         strncpy(statement->table_name, table.text, sizeof(statement->table_name));
 
         statement->type = STATEMENT_SELECT;
@@ -146,31 +150,56 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
     if (strncmp(input_buffer->buffer, "create table", 12) == 0) {
 
-        char* start = input_buffer->buffer + 12;
+        const char* start = input_buffer->buffer + 12;
 
         sscanf(start, "%31s", statement->table_name);
 
         char* open_paren = strchr(input_buffer->buffer, '(');
-        char* close_paren = strchr(input_buffer->buffer, ')');
+        char* close_paren = find_close_parenthesis(open_paren);
+
         if (!open_paren || !close_paren) return PREPARE_SYNTAX_ERROR;
 
         char column_definitions[256];
         strncpy(column_definitions, open_paren + 1, close_paren - open_paren - 1);
         column_definitions[close_paren - open_paren - 1] = '\0';
 
-        char* token = strtok(column_definitions, ",");
+        char* column_token = strtok(column_definitions, ",");
         statement->num_columns = 0;
 
-        while (token != NULL && statement->num_columns < MAX_COLUMNS) {
+        while (column_token != NULL && statement->num_columns < MAX_COLUMNS) {
             char col_name[32], col_type[16];
-            sscanf(token, "%31s %15s", col_name, col_type);
+            sscanf(column_token, "%31s %15s", col_name, col_type);
 
             strcpy(statement->columns[statement->num_columns].name, col_name);
             if (strcasecmp(col_type, "INT") == 0) {
                 statement->columns[statement->num_columns].type = COLUMN_INT;
             }
-            else if (strcasecmp(col_type, "TEXT") == 0) {
-                statement->columns[statement->num_columns].type = COLUMN_TEXT;
+
+            else if (strncasecmp(col_type, "VARCHAR", 7) == 0) {
+
+                uint32_t size = 256;
+
+                char *open_size_paren = strchr(col_type, '(');
+                if (open_size_paren != NULL) {
+
+                    char *close_size_paren = find_close_parenthesis(open_size_paren);
+                    if (close_size_paren != NULL) {
+
+                        char number_buf[16];
+                        size_t len = close_size_paren - open_size_paren - 1;
+                        if (len < sizeof(number_buf)) {
+
+                            strncpy(number_buf, open_size_paren + 1, len);
+                            number_buf[len] = '\0';
+
+                            char *endptr;
+                            size = strtol(number_buf, &endptr, 10);
+                        }
+                    }
+                }
+
+                statement->columns[statement->num_columns].type = COLUMN_VARCHAR;
+                statement->columns[statement->num_columns].size = size;
             }
 
             else {
@@ -178,7 +207,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             }
 
             statement->num_columns++;
-            token = strtok(NULL, ",");
+            column_token = strtok(NULL, ",");
         }
 
         statement->type = STATEMENT_CREATE_TABLE;
@@ -273,7 +302,7 @@ ExecuteResult execute_select(Statement* statement) {
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_create_table(Statement* statement) {
+ExecuteResult execute_create_table(const Statement* statement) {
     Table* new_table = malloc(sizeof(Table));
     if (!new_table) {
         printf("Error: memory allocation failed.\n");
@@ -299,7 +328,7 @@ ExecuteResult execute_create_table(Statement* statement) {
 }
 
 
-void print_row(const TableSchema* schema, Row* row) {
+void print_row(const TableSchema* schema, const Row* row) {
     printf("(");
     for (int i = 0; i < schema->num_columns; i++) {
         if (i > 0) printf(", ");
@@ -307,7 +336,7 @@ void print_row(const TableSchema* schema, Row* row) {
             int32_t val;
             memcpy(&val, row->data + get_column_offset(schema, i), sizeof(int32_t));
             printf("%d", val);
-        } else if (schema->columns[i].type == COLUMN_TEXT){
+        } else if (schema->columns[i].type == COLUMN_VARCHAR){
             char buf[257];
             memcpy(buf, row->data + get_column_offset(schema, i), 256);
             buf[256] = '\0';
@@ -319,5 +348,23 @@ void print_row(const TableSchema* schema, Row* row) {
 
 
 
+char* find_close_parenthesis(char* open_parenthesis) {
+    /*Function to find the closing parenthesis of an open parenthesis*/
+    int open_paren_count = 0;
 
+    while (*open_parenthesis != '\0') {
+        open_parenthesis++;
+
+        if (*open_parenthesis == '(') {
+            open_paren_count++;
+        } else if (*open_parenthesis == ')') {
+            if (open_paren_count == 0) {
+                return open_parenthesis;
+            }
+            open_paren_count--;
+        }
+    }
+
+    return NULL;
+}
 

@@ -6,12 +6,13 @@
 
 typedef enum {
     COLUMN_INT,
-    COLUMN_TEXT
+    COLUMN_VARCHAR
 } ColumnType;
 
 typedef struct {
     char name[32];
     ColumnType type;
+    uint32_t size;
 } Column;
 
 #define MAX_COLUMNS 32

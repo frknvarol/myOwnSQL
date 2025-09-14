@@ -22,7 +22,6 @@ int main(int argc, char* argv[]) {
             }
             continue;
         }
-        printf("(stub) You entered SQL: %s\n", input_buffer->buffer);
 
         Statement statement;
         switch (prepare_statement(input_buffer, &statement)) {
@@ -37,7 +36,11 @@ int main(int argc, char* argv[]) {
             case (PREPARE_INSERT_TYPE_ERROR):
                 printf("Insert type error.\n");
                 continue;
+            case (PREPARE_INSERT_VARCHAR_SIZE_ERROR):
+                printf("The size of the VARCHAR given is larger than the determined size.\n");
+                continue;
             }
+
 
 
         switch (execute_statement(&statement)) {

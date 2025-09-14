@@ -48,7 +48,6 @@ Token next_token(Lexer *lexer) {
     char chr = peek(lexer);
     if (chr == '\0') return make_token(TOKEN_EOF, "");
 
-    // Single-character tokens
     if (chr == ',') { advance(lexer); return make_token(TOKEN_COMMA, ","); }
     if (chr == ';') { advance(lexer); return make_token(TOKEN_SEMICOLON, ";"); }
     if (chr == '*') { advance(lexer); return make_token(TOKEN_STAR, "*"); }
@@ -56,7 +55,7 @@ Token next_token(Lexer *lexer) {
     if (chr == '>') { advance(lexer); return make_token(TOKEN_GREATER, ">"); }
     if (chr == '<') { advance(lexer); return make_token(TOKEN_LESS, "<"); }
 
-    // String literal
+
     if (chr == '\'' || chr == '"') {
         char quote = advance(lexer);
         char buffer[256]; size_t i = 0;
@@ -67,7 +66,7 @@ Token next_token(Lexer *lexer) {
         return make_token(TOKEN_STRING, buffer);
     }
 
-    // Number literal
+
     if (isdigit(chr)) {
         char buffer[256]; size_t i = 0;
         while (isdigit(peek(lexer)) && i < sizeof(buffer)-1)
@@ -76,7 +75,7 @@ Token next_token(Lexer *lexer) {
         return make_token(TOKEN_NUMBER, buffer);
     }
 
-    // Identifier or keyword
+
     if (isalpha(chr)) {
         char buffer[256]; size_t i = 0;
         while ((isalnum(peek(lexer)) || peek(lexer) == '_') && i < sizeof(buffer)-1)
@@ -88,7 +87,7 @@ Token next_token(Lexer *lexer) {
         return make_token(TOKEN_IDENTIFIER, buffer);
     }
 
-    // Unknown
+
     advance(lexer);
     return make_token(TOKEN_UNKNOWN, (char[]){chr, '\0'});
 }
