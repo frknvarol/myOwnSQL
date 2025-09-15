@@ -31,7 +31,7 @@ typedef struct {
     Column columns[MAX_COLUMNS];
 } Statement;
 
-void serialize_row(const TableSchema* schema, Row* source, void* destination);
+void serialize_row(const TableSchema* schema, const Row* source, void* destination);
 void deserialize_row(const TableSchema* schema, void* source, Row* destination);
 
 

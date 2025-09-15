@@ -32,10 +32,16 @@ int is_keyword(const char *str, TokenType *type) {
     if (strcasecmp(str, "INSERT") == 0) { *type = TOKEN_INSERT; return 1; }
     if (strcasecmp(str, "INTO") == 0)   { *type = TOKEN_INTO; return 1; }
     if (strcasecmp(str, "VALUES") == 0) { *type = TOKEN_VALUES; return 1; }
+    if (strcasecmp(str, "CREATE") == 0) { *type = TOKEN_CREATE; return 1; }
+    if (strcasecmp(str, "TABLE") == 0) { *type = TOKEN_TABLE; return 1; }
+    if (strncasecmp(str, "VARCHAR", 7) == 0) { *type = TOKEN_VARCHAR; return 1; }
+    if (strncasecmp(str, "INT", 3) == 0) { *type = TOKEN_INT; return 1; }
+
+
     return 0;
 }
 
-Token make_token(TokenType type, const char *text) {
+Token make_token(const TokenType type, const char *text) {
     Token token;
     token.type = type;
     strncpy(token.text, text, sizeof(token.text));
@@ -54,6 +60,8 @@ Token next_token(Lexer *lexer) {
     if (chr == '=') { advance(lexer); return make_token(TOKEN_EQUAL, "="); }
     if (chr == '>') { advance(lexer); return make_token(TOKEN_GREATER, ">"); }
     if (chr == '<') { advance(lexer); return make_token(TOKEN_LESS, "<"); }
+    if (chr == '(') { advance(lexer); return make_token(TOKEN_OPEN_PAREN, "("); }
+    if (chr == ')') { advance(lexer); return make_token(TOKEN_CLOSE_PAREN, ")"); }
 
 
     if (chr == '\'' || chr == '"') {
