@@ -17,66 +17,53 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
     Lexer lexer;
     init_lexer(&lexer, input_buffer->buffer);
-    const Token token = next_token(&lexer);
-    /*
-    TODO: BUG WITH INSERT
-    db > create table tablo ( c1 int, c2 varchar(10))
-    Table 'tablo' created with 2 columns.
-    Executed.
-    db > insert into tablo values ( 31, "annen")
-    Syntax error. Could not parse statement.
-    db > insert into tablo values (31 ,'annen')
-    Syntax error. Could not parse statement.
-    db > create table tablo1 ( c1 int)
-    Table 'tablo1' created with 1 columns.
-    Executed.
-    db > insert into tablo values ( 31)
-    Syntax error. Could not parse statement.
-     */
+    Token token = next_token(&lexer);
+
     if (token.type == TOKEN_INSERT) {
-        const Token token_into = next_token(&lexer);
-        if (token_into.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+        if (token.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
 
-        const Token table_token = next_token(&lexer);
-        if (table_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-        strncpy(statement->table_name, table_token.text, sizeof(statement->table_name));
+        token = next_token(&lexer);
+        if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+        strncpy(statement->table_name, token.text, sizeof(statement->table_name));
 
-        const Table* table = find_table(&global_db, table_token.text);
+        const Table* table = find_table(&global_db, token.text);
         const TableSchema schema = table->schema;
         const Row* row = create_row(&table->schema);
         statement->row = *row;
 
 
-        const Token values = next_token(&lexer);
-        if (values.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+        if (token.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
 
-        const Token open_paren = next_token(&lexer);
-        if (open_paren.type != TOKEN_UNKNOWN || strcmp(open_paren.text, "(") != 0)
+        token = next_token(&lexer);
+        if (token.type != TOKEN_OPEN_PAREN || strcmp(token.text, "(") != 0)
             return PREPARE_SYNTAX_ERROR;
 
 
         int col_index = 0;
         while (1) {
-            const Token val = next_token(&lexer);
+            token = next_token(&lexer);
 
             const ColumnType column_type = schema.columns[col_index].type;
 
             switch (column_type) {
-                case COLUMN_INT:
+                case COLUMN_INT: {
                     char *endptr;
-                    long int num;
 
-                    num = strtol(val.text, &endptr, 10);
-                    if (endptr == val.text || *endptr != '\0' || val.type != TOKEN_NUMBER) {
+                    const long int num = strtol(token.text, &endptr, 10);
+                    if (endptr == token.text || *endptr != '\0' || token.type != TOKEN_NUMBER) {
                         return PREPARE_INSERT_TYPE_ERROR;
                     }
                     set_int_value(&table->schema, &statement->row, col_index, (int32_t)num);
                     break;
-                case COLUMN_VARCHAR:
-                    if (val.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
-                    if (schema.columns[col_index].size < strlen(val.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
-                    set_text_value(&table->schema, &statement->row, col_index, val.text);
+                }
+                case COLUMN_VARCHAR: {
+                    if (token.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
+                    if (schema.columns[col_index].size < strlen(token.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
+                    set_text_value(&table->schema, &statement->row, col_index, token.text);
                     break;
+                }
                 default:
                     return PREPARE_SYNTAX_ERROR;
             }
@@ -106,20 +93,20 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
 
     if (token.type == TOKEN_CREATE) { // TODO: USE next_token function instead of strtok
-        const Token token_table = next_token(&lexer);
-        if (token_table.type != TOKEN_TABLE) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+        if (token.type != TOKEN_TABLE) return PREPARE_SYNTAX_ERROR;
 
-        const Token table_name = next_token(&lexer);
-        if (table_name.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-        strncpy(statement->table_name, table_name.text, sizeof(statement->table_name));
+        token = next_token(&lexer);
+        if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+        strncpy(statement->table_name, token.text, sizeof(statement->table_name));
 
-        Token token_open_paren = next_token(&lexer);
-        if (token_open_paren.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+        if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
 
         char* open_paren = strchr(input_buffer->buffer, '(');
         if (!open_paren) return PREPARE_SYNTAX_ERROR;
 
-        if (open_paren != strstr(input_buffer->buffer, token_open_paren.text)) {
+        if (open_paren != strstr(input_buffer->buffer, token.text)) {
             return PREPARE_SYNTAX_ERROR;
         }
 
@@ -132,48 +119,47 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         column_definitions[close_paren - open_paren - 1] = '\0';
 
         statement->num_columns = 0;
-        Token column_token;
         while (true) {
-            column_token = next_token(&lexer);
-            if (column_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            strcpy(statement->columns[statement->num_columns].name, column_token.text);
+            token = next_token(&lexer);
+            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+            strcpy(statement->columns[statement->num_columns].name, token.text);
 
-            column_token = next_token(&lexer);
-            if (column_token.type == TOKEN_INT) {
+            token = next_token(&lexer);
+            if (token.type == TOKEN_INT) {
                 statement->columns[statement->num_columns].type = COLUMN_INT;
 
             }
 
-            else if (column_token.type == TOKEN_VARCHAR) {
+            else if (token.type == TOKEN_VARCHAR) {
 
-                column_token = next_token(&lexer);
+                token = next_token(&lexer);
 
-                if (column_token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
+                if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
 
-                column_token = next_token(&lexer);
+                token = next_token(&lexer);
 
-                if (column_token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
+                if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
 
                 char *endptr;
-                const long val = strtol(column_token.text, &endptr, 10);
-                if (endptr == column_token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
+                const long val = strtol(token.text, &endptr, 10);
+                if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
 
                 uint32_t size = (uint32_t)val;
 
                 statement->columns[statement->num_columns].type = COLUMN_VARCHAR;
                 statement->columns[statement->num_columns].size = size;
 
-                column_token = next_token(&lexer);
+                token = next_token(&lexer);
 
-                if (column_token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
+                if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
 
             }
 
-            column_token = next_token(&lexer);
+            token = next_token(&lexer);
 
             statement->num_columns++;
-            if (column_token.type == TOKEN_CLOSE_PAREN) break;
-            if (column_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+            if (token.type == TOKEN_CLOSE_PAREN) break;
+            if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
         }
 
 

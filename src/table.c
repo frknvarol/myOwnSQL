@@ -48,8 +48,16 @@ void set_int_value(const TableSchema* schema, Row* row, int col_index, int32_t v
 }
 
 void set_text_value(const TableSchema* schema, Row* row, int col_index, const char* text) {
-    size_t offset = get_column_offset(schema, col_index);
-    strncpy((char*)(row->data + offset), text, 256);
+    const size_t offset = get_column_offset(schema, col_index);
+    size_t max_size = 0;
+
+    if (schema->columns[col_index].type == COLUMN_VARCHAR) {
+        max_size = schema->columns[col_index].size;
+    }
+
+    size_t len = strlen(text);
+    if (len > max_size) len = max_size;
+    memcpy((char*)(row->data + offset), text, len);
 }
 
 
