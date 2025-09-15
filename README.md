@@ -1,0 +1,1 @@
+This project is for educational purposes, aiming to learn C and the inner workings of the SQL engine.
