@@ -9,6 +9,8 @@
 #include "table.h"
 #include "database.h"
 #include "lexer.h"
+#include "binary_plus_tree.h"
+
 
 Database global_db;
 
@@ -239,9 +241,14 @@ ExecuteResult execute_insert(Statement* statement) {
     serialize_row(&table->schema, row_to_insert, destination);
     table->num_rows += 1;
 
+    // TODO as i have not implemented a primary key attribute i will for now use the row number as the key for bpt
+    //bpt_insert(table->tree, (int)table->num_rows, destination);
+
+
     return EXECUTE_SUCCESS;
 }
 
+// TODO implement BPT search (first i have to get the lexer to do column search and where statements)
 ExecuteResult execute_select(Statement* statement) {
     Table* table = find_table(&global_db, statement->table_name);
     Row row;
@@ -268,6 +275,7 @@ ExecuteResult execute_create_table(const Statement* statement) {
     }
 
     new_table->num_rows = 0;
+    new_table->tree = NULL;
 
     if (add_table(&global_db, new_table) != 0) {
         free(new_table);

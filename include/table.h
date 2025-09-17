@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "binary_plus_tree.h"
 
 typedef enum {
     COLUMN_INT,
@@ -13,6 +14,7 @@ typedef struct {
     char name[32];
     ColumnType type;
     uint32_t size;
+    int is_primary;
 } Column;
 
 #define MAX_COLUMNS 32
@@ -44,6 +46,7 @@ typedef struct {
     TableSchema schema;
     void* pages[TABLE_MAX_PAGES];
     uint32_t num_rows;
+    BPTree* tree;
 } Table;
 
 void free_table(Table* table);
