@@ -92,7 +92,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     }
 
 
-    if (token.type == TOKEN_CREATE) { // TODO: USE next_token function instead of strtok
+    if (token.type == TOKEN_CREATE) {
         token = next_token(&lexer);
         if (token.type != TOKEN_TABLE) return PREPARE_SYNTAX_ERROR;
 
@@ -161,51 +161,6 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             if (token.type == TOKEN_CLOSE_PAREN) break;
             if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
         }
-
-
-        /*while (column_token != NULL && statement->num_columns < MAX_COLUMNS) {
-            char col_name[32], col_type[16];
-            sscanf(column_token, "%31s %15s", col_name, col_type);
-
-            strcpy(statement->columns[statement->num_columns].name, col_name);
-            if (strcasecmp(col_type, "INT") == 0) {
-                statement->columns[statement->num_columns].type = COLUMN_INT;
-            }
-
-            else if (strncasecmp(col_type, "VARCHAR", 7) == 0) {
-
-                uint32_t size = 256;
-
-                char *open_size_paren = strchr(col_type, '(');
-                if (open_size_paren != NULL) {
-
-                    const char *close_size_paren = find_close_parenthesis(open_size_paren);
-                    if (close_size_paren != NULL) {
-
-                        char number_buf[16];
-                        size_t len = close_size_paren - open_size_paren - 1;
-                        if (len < sizeof(number_buf)) {
-
-                            strncpy(number_buf, open_size_paren + 1, len);
-                            number_buf[len] = '\0';
-
-                            char *endptr;
-                            size = strtol(number_buf, &endptr, 10);
-                        }
-                    }
-                }
-
-                statement->columns[statement->num_columns].type = COLUMN_VARCHAR;
-                statement->columns[statement->num_columns].size = size;
-            }
-
-            else {
-                return PREPARE_SYNTAX_ERROR;
-            }
-
-            statement->num_columns++;
-            column_token = strtok(NULL, ",");
-        }*/
 
         statement->type = STATEMENT_CREATE_TABLE;
 
