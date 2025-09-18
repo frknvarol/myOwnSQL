@@ -85,8 +85,6 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     }
 
     if (token.type == TOKEN_SELECT) {
-        // TODO get the column names and indexes and put them in the SelectStatement selected_col_indexes array
-        // TODO using the selected_col_lexer
 
         SelectStatement select_statement;
         select_statement.selected_col_count = 0;
@@ -107,25 +105,26 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
 
         Token col_token = next_token(&selected_col_lexer);
-        while (col_token.type != TOKEN_FROM) {
-            if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+        if (col_token.type != TOKEN_STAR) {
             uint32_t col_index = 0;
-            for (uint32_t i = 0; i < schema.num_columns; i++ ) {
-                if (strcmp(schema.columns[i].name, col_token.text) == 0) {
-                    select_statement.selected_col_indexes[col_index] = i;
-                    col_index++;
+            while (col_token.type != TOKEN_FROM) {
+                if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+                for (uint32_t i = 0; i < schema.num_columns; i++ ) {
+                    if (strcmp(schema.columns[i].name, col_token.text) == 0) {
+                        select_statement.selected_col_indexes[col_index] = i;
+                        col_index++;
+                    }
                 }
+                col_token = next_token(&selected_col_lexer);
+
+                if (col_token.type == TOKEN_FROM) break;
+                if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+
+                col_token = next_token(&selected_col_lexer);
             }
-            select_statement.selected_col_count = col_index + 1;
-            col_token = next_token(&selected_col_lexer);
 
-            if (col_token.type == TOKEN_FROM) break;
-            if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
-
-            col_token = next_token(&selected_col_lexer);
-        }
-
-
+            select_statement.selected_col_count = col_index;
+        } else select_statement.selected_col_count = 0;
 
 
         statement->type = STATEMENT_SELECT;
@@ -332,8 +331,30 @@ ExecuteResult execute_insert(InsertStatement* insert_statement) {
 // TODO implement BPT search (first i have to get the lexer to do column search and where statements)
 ExecuteResult execute_select(SelectStatement* select_statement) {
     Table* table = find_table(&global_db, select_statement->table_name);
+    TableSchema* schema = &(table->schema);
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
+
+
+    if (select_statement->selected_col_count == 0) {
+        printf("COLUMNS:\n");
+        printf("(");
+        for (int i = 0; i < schema->num_columns; i++) {
+            if (i > 0) printf(", ");
+            printf("%s", schema->columns[i].name);
+        }
+        printf(")\n\n");
+    } else {
+        printf("COLUMNS:\n");
+        printf("(");
+        for (uint32_t i = 0; i < select_statement->selected_col_count; i++) {
+            if (i > 0) printf(", ");
+            uint32_t index = select_statement->selected_col_indexes[i];
+            printf("%s", schema->columns[index].name);
+        }
+        printf(")\n\n");
+    }
+
     for (uint32_t i = 0; i < table->num_rows; i++) {
         deserialize_row(&table->schema, row_slot(table, i), &row);
         print_row(&table->schema, &row, select_statement->selected_col_indexes, select_statement->selected_col_count);
@@ -376,34 +397,34 @@ ExecuteResult execute_create_table(const CreateStatement* create_statement) {
 
 void print_row(const TableSchema* schema, const Row* row, const uint32_t selected_col_indexes[MAX_COLUMNS], uint32_t selected_col_count) {
     printf("(");
-    /* TODO use this for SELECT * FROM statements
-    for (int i = 0; i < schema->num_columns; i++) {
-        if (i > 0) printf(", ");
-        if (schema->columns[i].type == COLUMN_INT) {
-            int32_t val;
-            memcpy(&val, row->data + get_column_offset(schema, i), sizeof(int32_t));
-            printf("%d", val);
-        } else if (schema->columns[i].type == COLUMN_VARCHAR){
-            char buf[257];
-            memcpy(buf, row->data + get_column_offset(schema, i), 256);
-            buf[256] = '\0';
-            printf("%s", buf);
+    if (selected_col_count == 0) {
+        for (int i = 0; i < schema->num_columns; i++) {
+            if (i > 0) printf(", ");
+            if (schema->columns[i].type == COLUMN_INT) {
+                int32_t val;
+                memcpy(&val, row->data + get_column_offset(schema, i), sizeof(int32_t));
+                printf("%d", val);
+            } else if (schema->columns[i].type == COLUMN_VARCHAR){
+                char buf[257];
+                memcpy(buf, row->data + get_column_offset(schema, i), 256);
+                buf[256] = '\0';
+                printf("%s", buf);
+            }
         }
-    }
-    */
-
-    for (uint32_t i = 0; i < selected_col_count; i++) {
-        if (i > 0) printf(", ");
-        uint32_t index = selected_col_indexes[i];
-        if (schema->columns[index].type == COLUMN_INT) {
-            int32_t val;
-            memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
-            printf("%d", val);
-        } else if (schema->columns[index].type == COLUMN_VARCHAR){
-            char buf[257];
-            memcpy(buf, row->data + get_column_offset(schema, index), 256);
-            buf[256] = '\0';
-            printf("%s", buf);
+    } else {
+        for (uint32_t i = 0; i < selected_col_count; i++) {
+            if (i > 0) printf(", ");
+            uint32_t index = selected_col_indexes[i];
+            if (schema->columns[index].type == COLUMN_INT) {
+                int32_t val;
+                memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
+                printf("%d", val);
+            } else if (schema->columns[index].type == COLUMN_VARCHAR){
+                char buf[257];
+                memcpy(buf, row->data + get_column_offset(schema, index), 256);
+                buf[256] = '\0';
+                printf("%s", buf);
+            }
         }
     }
     printf(")\n");
