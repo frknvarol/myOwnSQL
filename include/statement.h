@@ -37,6 +37,8 @@ typedef struct {
 
 typedef struct {
     char table_name[32];
+    uint32_t selected_col_indexes[MAX_COLUMNS];
+    uint32_t selected_col_count;
 } SelectStatement;
 
 typedef struct {
@@ -70,7 +72,7 @@ ExecuteResult execute_statement(Statement* statement);
 ExecuteResult execute_insert(InsertStatement* insert_statement);
 ExecuteResult execute_select(SelectStatement* select_statement);
 ExecuteResult execute_create_table(const CreateStatement* create_statement);
-void print_row(const TableSchema* schema, const Row* row);
+void print_row(const TableSchema* schema, const Row* row, const uint32_t selected_col_indexes[MAX_COLUMNS], uint32_t selected_col_count);
 char* find_close_parenthesis(char* open_parenthesis);
 
 

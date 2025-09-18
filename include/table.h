@@ -15,6 +15,7 @@ typedef struct {
     ColumnType type;
     uint32_t size;
     int is_primary;
+    uint32_t index;
 } Column;
 
 #define MAX_COLUMNS 32

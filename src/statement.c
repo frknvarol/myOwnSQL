@@ -85,14 +85,48 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     }
 
     if (token.type == TOKEN_SELECT) {
+        // TODO get the column names and indexes and put them in the SelectStatement selected_col_indexes array
+        // TODO using the selected_col_lexer
+
         SelectStatement select_statement;
+        select_statement.selected_col_count = 0;
 
-        Token col = next_token(&lexer); // e.g. '*' or column
-        const Token from = next_token(&lexer);
-        if (from.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
+        Lexer selected_col_lexer = lexer;
+        token = next_token(&lexer);
 
-        const Token table = next_token(&lexer);
-        strncpy(select_statement.table_name, table.text, sizeof(select_statement.table_name));
+        while (token.type != TOKEN_FROM) {
+            token = next_token(&lexer);
+        }
+
+        token = next_token(&lexer);
+        strncpy(select_statement.table_name, token.text, sizeof(select_statement.table_name));
+
+        Table* table = find_table(&global_db, token.text);
+        const TableSchema schema = table->schema;
+
+
+
+        Token col_token = next_token(&selected_col_lexer);
+        while (col_token.type != TOKEN_FROM) {
+            if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+            uint32_t col_index = 0;
+            for (uint32_t i = 0; i < schema.num_columns; i++ ) {
+                if (strcmp(schema.columns[i].name, col_token.text) == 0) {
+                    select_statement.selected_col_indexes[col_index] = i;
+                    col_index++;
+                }
+            }
+            select_statement.selected_col_count = col_index + 1;
+            col_token = next_token(&selected_col_lexer);
+
+            if (col_token.type == TOKEN_FROM) break;
+            if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+
+            col_token = next_token(&selected_col_lexer);
+        }
+
+
+
 
         statement->type = STATEMENT_SELECT;
         statement->select_stmt = select_statement;
@@ -136,6 +170,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
                 if (token.type == TOKEN_IDENTIFIER) {
                     strcpy(create_statement.columns[create_statement.num_columns].name, token.text);
+                    create_statement.columns[create_statement.num_columns].index = create_statement.num_columns;
 
                     token = next_token(&lexer);
                     if (token.type == TOKEN_INT) {
@@ -193,7 +228,6 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                 token = next_token(&lexer);
 
                 if (token.type == TOKEN_CLOSE_PAREN) break;
-                //TODO BUG: gives TOKEN_EOF when primary key is used for some reason
                 if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
             }
 
@@ -288,8 +322,8 @@ ExecuteResult execute_insert(InsertStatement* insert_statement) {
     // TODO as i have not implemented a primary key attribute i will for now use the row number as the key for bpt
     //bpt_insert(table->tree, (int)table->primary_key_index, destination);
 
-    int key = extract_primary_key(&table->schema, row_to_insert, table->primary_key_index);
-    bpt_insert(table->tree, key, destination);
+    //int key = extract_primary_key(&table->schema, row_to_insert, table->primary_key_index);
+    //bpt_insert(table->tree, key, destination);
 
 
     return EXECUTE_SUCCESS;
@@ -302,7 +336,7 @@ ExecuteResult execute_select(SelectStatement* select_statement) {
     row.data = malloc(compute_row_size(&table->schema));
     for (uint32_t i = 0; i < table->num_rows; i++) {
         deserialize_row(&table->schema, row_slot(table, i), &row);
-        print_row(&table->schema, &row);
+        print_row(&table->schema, &row, select_statement->selected_col_indexes, select_statement->selected_col_count);
     }
     free(row.data);
     return EXECUTE_SUCCESS;
@@ -327,7 +361,7 @@ ExecuteResult execute_create_table(const CreateStatement* create_statement) {
 
     new_table->num_rows = 0;
     new_table->primary_key_index = create_statement->primary_col_index;
-    new_table->tree = NULL;
+
 
     if (add_table(&global_db, new_table) != 0) {
         free(new_table);
@@ -340,8 +374,9 @@ ExecuteResult execute_create_table(const CreateStatement* create_statement) {
 }
 
 
-void print_row(const TableSchema* schema, const Row* row) {
+void print_row(const TableSchema* schema, const Row* row, const uint32_t selected_col_indexes[MAX_COLUMNS], uint32_t selected_col_count) {
     printf("(");
+    /* TODO use this for SELECT * FROM statements
     for (int i = 0; i < schema->num_columns; i++) {
         if (i > 0) printf(", ");
         if (schema->columns[i].type == COLUMN_INT) {
@@ -351,6 +386,22 @@ void print_row(const TableSchema* schema, const Row* row) {
         } else if (schema->columns[i].type == COLUMN_VARCHAR){
             char buf[257];
             memcpy(buf, row->data + get_column_offset(schema, i), 256);
+            buf[256] = '\0';
+            printf("%s", buf);
+        }
+    }
+    */
+
+    for (uint32_t i = 0; i < selected_col_count; i++) {
+        if (i > 0) printf(", ");
+        uint32_t index = selected_col_indexes[i];
+        if (schema->columns[index].type == COLUMN_INT) {
+            int32_t val;
+            memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
+            printf("%d", val);
+        } else if (schema->columns[index].type == COLUMN_VARCHAR){
+            char buf[257];
+            memcpy(buf, row->data + get_column_offset(schema, index), 256);
             buf[256] = '\0';
             printf("%s", buf);
         }
