@@ -34,6 +34,9 @@ int is_keyword(const char *str, TokenType *type) {
     if (strcasecmp(str, "VALUES") == 0) { *type = TOKEN_VALUES; return 1; }
     if (strcasecmp(str, "CREATE") == 0) { *type = TOKEN_CREATE; return 1; }
     if (strcasecmp(str, "TABLE") == 0) { *type = TOKEN_TABLE; return 1; }
+    if (strcasecmp(str, "DATABASE") == 0) { *type = TOKEN_DATABASE; return 1; }
+    if (strcasecmp(str, "PRIMARY") == 0) { *type = TOKEN_PRIMARY; return 1; }
+    if (strcasecmp(str, "KEY") == 0) { *type = TOKEN_KEY; return 1; }
     if (strncasecmp(str, "VARCHAR", 7) == 0) { *type = TOKEN_VARCHAR; return 1; }
     if (strncasecmp(str, "INT", 3) == 0) { *type = TOKEN_INT; return 1; }
 

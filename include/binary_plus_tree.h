@@ -13,6 +13,7 @@ typedef struct BPTreeNode {
 
 typedef struct {
     BPTreeNode* root;
+    int indexed_col;
 } BPTree;
 
 void* bpt_search(BPTreeNode* root, int key);

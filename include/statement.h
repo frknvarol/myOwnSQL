@@ -23,12 +23,14 @@ typedef enum {
 
 #define TABLE_MAX_PAGES 100
 
+// TODO this format won't do have to implement something else before it gets too complicated to fix
 typedef struct {
     StatementType type;
     char table_name[32];
     uint32_t num_columns;
     Row row;
     Column columns[MAX_COLUMNS];
+    uint32_t primary_col_index;
 } Statement;
 
 void serialize_row(const TableSchema* schema, const Row* source, void* destination);
