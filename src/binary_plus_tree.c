@@ -1,5 +1,4 @@
 #include "binary_plus_tree.h"
-#include <stddef.h>
 #include <stdlib.h>
 
 void* bpt_search(BPTreeNode* root, int key) {
@@ -138,6 +137,7 @@ void bpt_insert(BPTree* tree, int key, void* row_ptr) {
 
 }
 
+
 void free_node(BPTreeNode* node) {
     if (node == NULL) return;
 
@@ -152,4 +152,6 @@ void free_node(BPTreeNode* node) {
 void free_tree(BPTree* tree) {
     free_node(tree->root);
     tree->root = NULL;
+
+    free(tree);
 }

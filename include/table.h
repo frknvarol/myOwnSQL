@@ -50,6 +50,9 @@ typedef struct {
     uint32_t primary_key_index;
 } Table;
 
+
+int extract_primary_key(const TableSchema* schema, const Row* row, int pk_index) ;
+
 void free_table(Table* table);
 Table* new_table();
 

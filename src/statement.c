@@ -22,17 +22,19 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
     Token token = next_token(&lexer);
 
     if (token.type == TOKEN_INSERT) {
+        InsertStatement insert_statement;
         token = next_token(&lexer);
         if (token.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
 
         token = next_token(&lexer);
         if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-        strncpy(statement->table_name, token.text, sizeof(statement->table_name));
+        strncpy(insert_statement.table_name, token.text, sizeof(insert_statement.table_name));
 
         const Table* table = find_table(&global_db, token.text);
         const TableSchema schema = table->schema;
+
         const Row* row = create_row(&table->schema);
-        statement->row = *row;
+        insert_statement.row = *row;
 
 
         token = next_token(&lexer);
@@ -57,13 +59,13 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                     if (endptr == token.text || *endptr != '\0' || token.type != TOKEN_NUMBER) {
                         return PREPARE_INSERT_TYPE_ERROR;
                     }
-                    set_int_value(&table->schema, &statement->row, col_index, (int32_t)num);
+                    set_int_value(&table->schema, &insert_statement.row, col_index, (int32_t)num);
                     break;
                 }
                 case COLUMN_VARCHAR: {
                     if (token.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
                     if (schema.columns[col_index].size < strlen(token.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
-                    set_text_value(&table->schema, &statement->row, col_index, token.text);
+                    set_text_value(&table->schema, &insert_statement.row, col_index, token.text);
                     break;
                 }
                 default:
@@ -78,18 +80,23 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         }
 
         statement->type = STATEMENT_INSERT;
+        statement->insert_stmt = insert_statement;
         return PREPARE_SUCCESS;
     }
 
     if (token.type == TOKEN_SELECT) {
+        SelectStatement select_statement;
+
         Token col = next_token(&lexer); // e.g. '*' or column
         const Token from = next_token(&lexer);
         if (from.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
 
         const Token table = next_token(&lexer);
-        strncpy(statement->table_name, table.text, sizeof(statement->table_name));
+        strncpy(select_statement.table_name, table.text, sizeof(select_statement.table_name));
 
         statement->type = STATEMENT_SELECT;
+        statement->select_stmt = select_statement;
+
         return PREPARE_SUCCESS;
     }
 
@@ -99,9 +106,11 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         token = next_token(&lexer);
 
         if (token.type == TOKEN_TABLE) {
+            CreateStatement create_statement;
+
             token = next_token(&lexer);
             if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            strncpy(statement->table_name, token.text, sizeof(statement->table_name));
+            strncpy(create_statement.table_name, token.text, sizeof(create_statement.table_name));
 
             token = next_token(&lexer);
             if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
@@ -121,12 +130,47 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             strncpy(column_definitions, open_paren+ 1, close_paren - open_paren - 1);
             column_definitions[close_paren - open_paren - 1] = '\0';
 
-            statement->num_columns = 0;
+            create_statement.num_columns = 0;
             while (true) {
                 token = next_token(&lexer);
 
+                if (token.type == TOKEN_IDENTIFIER) {
+                    strcpy(create_statement.columns[create_statement.num_columns].name, token.text);
 
-                if (token.type == TOKEN_PRIMARY) {
+                    token = next_token(&lexer);
+                    if (token.type == TOKEN_INT) {
+                        create_statement.columns[create_statement.num_columns].type = COLUMN_INT;
+                        create_statement.num_columns++;
+                    }
+
+                    else if (token.type == TOKEN_VARCHAR) {
+
+                        token = next_token(&lexer);
+
+                        if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
+
+                        token = next_token(&lexer);
+
+                        if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
+
+                        char *endptr;
+                        const long val = strtol(token.text, &endptr, 10);
+                        if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
+
+                        uint32_t size = (uint32_t)val;
+
+                        create_statement.columns[create_statement.num_columns].type = COLUMN_VARCHAR;
+                        create_statement.columns[create_statement.num_columns].size = size;
+
+                        token = next_token(&lexer);
+                        if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
+                        create_statement.num_columns++;
+
+
+                    }
+                }
+
+                else if (token.type == TOKEN_PRIMARY) {
                     token = next_token(&lexer);
                     if (token.type != TOKEN_KEY) return PREPARE_SYNTAX_ERROR;
 
@@ -138,39 +182,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                     if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
 
 
-                    statement->primary_col_index = statement->num_columns;
-
-                    token = next_token(&lexer);
-                    if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
-
-                }
-
-                else if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-                strcpy(statement->columns[statement->num_columns].name, token.text);
-
-                token = next_token(&lexer);
-                if (token.type == TOKEN_INT) {
-                    statement->columns[statement->num_columns].type = COLUMN_INT;
-                }
-
-                else if (token.type == TOKEN_VARCHAR) {
-
-                    token = next_token(&lexer);
-
-                    if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
-
-                    token = next_token(&lexer);
-
-                    if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
-
-                    char *endptr;
-                    const long val = strtol(token.text, &endptr, 10);
-                    if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
-
-                    uint32_t size = (uint32_t)val;
-
-                    statement->columns[statement->num_columns].type = COLUMN_VARCHAR;
-                    statement->columns[statement->num_columns].size = size;
+                    create_statement.primary_col_index = create_statement.num_columns;
 
                     token = next_token(&lexer);
                     if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
@@ -180,7 +192,6 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
                 token = next_token(&lexer);
 
-                statement->num_columns++;
                 if (token.type == TOKEN_CLOSE_PAREN) break;
                 //TODO BUG: gives TOKEN_EOF when primary key is used for some reason
                 if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
@@ -188,6 +199,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
             statement->type = STATEMENT_CREATE_TABLE;
 
+            statement->create_stmt = create_statement;
             return PREPARE_SUCCESS;
         }
 
@@ -251,38 +263,41 @@ void* row_slot(Table* table, uint32_t row_num) {
 ExecuteResult execute_statement(Statement* statement) {
     switch (statement->type) {
         case STATEMENT_INSERT:
-            return execute_insert(statement);
+            return execute_insert(&statement->insert_stmt);
         case STATEMENT_SELECT:
-            return execute_select(statement);
+            return execute_select(&statement->select_stmt);
         case STATEMENT_CREATE_TABLE:
-            return execute_create_table(statement);
+            return execute_create_table(&statement->create_stmt);
     }
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_insert(Statement* statement) {
-    Table* table = find_table(&global_db, statement->table_name);
+ExecuteResult execute_insert(InsertStatement* insert_statement) {
+    Table* table = find_table(&global_db, insert_statement->table_name);
 
     if (table->num_rows >= TABLE_MAX_ROWS) {
         return EXECUTE_FAIL;
     }
 
-    Row* row_to_insert = &(statement->row);
+    Row* row_to_insert = &(insert_statement->row);
     void* destination = row_slot(table, table->num_rows);
 
     serialize_row(&table->schema, row_to_insert, destination);
     table->num_rows += 1;
 
     // TODO as i have not implemented a primary key attribute i will for now use the row number as the key for bpt
-    bpt_insert(table->tree, (int)table->primary_key_index, destination);
+    //bpt_insert(table->tree, (int)table->primary_key_index, destination);
+
+    int key = extract_primary_key(&table->schema, row_to_insert, table->primary_key_index);
+    bpt_insert(table->tree, key, destination);
 
 
     return EXECUTE_SUCCESS;
 }
 
 // TODO implement BPT search (first i have to get the lexer to do column search and where statements)
-ExecuteResult execute_select(Statement* statement) {
-    Table* table = find_table(&global_db, statement->table_name);
+ExecuteResult execute_select(SelectStatement* select_statement) {
+    Table* table = find_table(&global_db, select_statement->table_name);
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
     for (uint32_t i = 0; i < table->num_rows; i++) {
@@ -293,21 +308,25 @@ ExecuteResult execute_select(Statement* statement) {
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_create_table(const Statement* statement) {
+ExecuteResult execute_create_table(const CreateStatement* create_statement) {
     Table* new_table = malloc(sizeof(Table));
     if (!new_table) {
         printf("Error: memory allocation failed.\n");
         return EXECUTE_FAIL;
     }
 
-    strncpy(new_table->name, statement->table_name, sizeof(new_table->name));
-    new_table->schema.num_columns = statement->num_columns;
-    for (int i = 0; i < statement->num_columns; i++) {
-        new_table->schema.columns[i] = statement->columns[i];
+    strncpy(new_table->name, create_statement->table_name, sizeof(new_table->name));
+    new_table->schema.num_columns = create_statement->num_columns;
+    for (int i = 0; i < create_statement->num_columns; i++) {
+        new_table->schema.columns[i] = create_statement->columns[i];
     }
 
+    //TODO don't forget to add free_table function to DROP TABLE statement when you implement it
+    new_table->tree = malloc(sizeof(BPTree));
+    new_table->tree->root = NULL;
+
     new_table->num_rows = 0;
-    new_table->primary_key_index = statement->primary_col_index;
+    new_table->primary_key_index = create_statement->primary_col_index;
     new_table->tree = NULL;
 
     if (add_table(&global_db, new_table) != 0) {
@@ -315,7 +334,7 @@ ExecuteResult execute_create_table(const Statement* statement) {
         return EXECUTE_FAIL;
     }
 
-    printf("Table '%s' created with %d columns.\n",
+    printf("Table %s created with %d columns.\n",
            new_table->name, new_table->schema.num_columns);
     return EXECUTE_SUCCESS;
 }

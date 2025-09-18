@@ -23,14 +23,29 @@ typedef enum {
 
 #define TABLE_MAX_PAGES 100
 
-// TODO this format won't do have to implement something else before it gets too complicated to fix
 typedef struct {
-    StatementType type;
     char table_name[32];
     uint32_t num_columns;
-    Row row;
     Column columns[MAX_COLUMNS];
     uint32_t primary_col_index;
+} CreateStatement;
+
+typedef struct {
+    char table_name[32];
+    Row row;
+} InsertStatement;
+
+typedef struct {
+    char table_name[32];
+} SelectStatement;
+
+typedef struct {
+    StatementType type;
+    union {
+        CreateStatement create_stmt;
+        InsertStatement insert_stmt;
+        SelectStatement select_stmt;
+    };
 } Statement;
 
 void serialize_row(const TableSchema* schema, const Row* source, void* destination);
@@ -52,9 +67,9 @@ typedef enum {
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
 ExecuteResult execute_statement(Statement* statement);
-ExecuteResult execute_insert(Statement* statement);
-ExecuteResult execute_select(Statement* statement);
-ExecuteResult execute_create_table(const Statement* statement);
+ExecuteResult execute_insert(InsertStatement* insert_statement);
+ExecuteResult execute_select(SelectStatement* select_statement);
+ExecuteResult execute_create_table(const CreateStatement* create_statement);
 void print_row(const TableSchema* schema, const Row* row);
 char* find_close_parenthesis(char* open_parenthesis);
 

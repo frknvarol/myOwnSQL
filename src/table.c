@@ -60,10 +60,18 @@ void set_text_value(const TableSchema* schema, Row* row, int col_index, const ch
     memcpy((char*)(row->data + offset), text, len);
 }
 
+int extract_primary_key(const TableSchema* schema, const Row* row, int pk_index) {
+    size_t offset = get_column_offset(schema, pk_index);
+
+    int key; //assumes primary key is an int might go into making strings primary as well
+    memcpy(&key, row->data + offset, sizeof(int));
+    return key;
+}
+
 
 
 Table* new_table() {
-    Table* table = (Table*)malloc(sizeof(Table));
+    Table* table = malloc(sizeof(Table));
     table->num_rows = 0;
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
         table->pages[i] = NULL;
@@ -77,5 +85,6 @@ void free_table(Table* table) {
             free(table->pages[i]);
         }
     }
+    free_tree(table->tree);
     free(table);
 }
