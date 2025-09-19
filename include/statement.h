@@ -24,6 +24,12 @@ typedef enum {
 #define TABLE_MAX_PAGES 100
 
 typedef struct {
+    char* column_name;
+    uint32_t column_index;
+    char* value;
+} Condition;
+
+typedef struct {
     char table_name[32];
     uint32_t num_columns;
     Column columns[MAX_COLUMNS];
@@ -39,6 +45,9 @@ typedef struct {
     char table_name[32];
     uint32_t selected_col_indexes[MAX_COLUMNS];
     uint32_t selected_col_count;
+    int has_condition;
+    Condition conditions[MAX_COLUMNS];
+    uint32_t condition_count;
 } SelectStatement;
 
 typedef struct {
@@ -49,6 +58,7 @@ typedef struct {
         SelectStatement select_stmt;
     };
 } Statement;
+
 
 void serialize_row(const TableSchema* schema, const Row* source, void* destination);
 void deserialize_row(const TableSchema* schema, void* source, Row* destination);
@@ -70,9 +80,9 @@ typedef enum {
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
 ExecuteResult execute_statement(Statement* statement);
 ExecuteResult execute_insert(InsertStatement* insert_statement);
-ExecuteResult execute_select(SelectStatement* select_statement);
+ExecuteResult execute_select(const SelectStatement* select_statement);
 ExecuteResult execute_create_table(const CreateStatement* create_statement);
-void print_row(const TableSchema* schema, const Row* row, const uint32_t selected_col_indexes[MAX_COLUMNS], uint32_t selected_col_count);
+void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 char* find_close_parenthesis(char* open_parenthesis);
 
 

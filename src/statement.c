@@ -103,6 +103,36 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         const TableSchema schema = table->schema;
 
 
+        token = next_token(&lexer);
+        if (token.type == TOKEN_WHERE) {
+            select_statement.condition_count = 0;
+            uint32_t index = 0;
+            while (1) {
+
+                token = next_token(&lexer);
+                if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+                select_statement.conditions[index].column_name = token.text;
+
+                token = next_token(&lexer);
+                if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
+
+                token = next_token(&lexer);
+                if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
+                select_statement.conditions[index].value = token.text;
+
+                index++;
+                select_statement.condition_count++;
+
+                token = next_token(&lexer);
+                if (token.type == TOKEN_AND) break;
+                if (token.type == TOKEN_SEMICOLON) break;
+                if (token.type == TOKEN_EOF) break;
+
+
+            }
+            select_statement.has_condition = 1;
+        }
+        else select_statement.has_condition = 0;
 
         Token col_token = next_token(&selected_col_lexer);
         if (col_token.type != TOKEN_STAR) {
@@ -113,6 +143,14 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                     if (strcmp(schema.columns[i].name, col_token.text) == 0) {
                         select_statement.selected_col_indexes[col_index] = i;
                         col_index++;
+                    }
+
+                    if (select_statement.has_condition) {
+                        for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
+                            if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
+                                select_statement.conditions[j].column_index = i;
+                            }
+                        }
                     }
                 }
                 col_token = next_token(&selected_col_lexer);
@@ -125,6 +163,8 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
             select_statement.selected_col_count = col_index;
         } else select_statement.selected_col_count = 0;
+
+
 
 
         statement->type = STATEMENT_SELECT;
@@ -329,9 +369,9 @@ ExecuteResult execute_insert(InsertStatement* insert_statement) {
 }
 
 // TODO implement BPT search (first i have to get the lexer to do column search and where statements)
-ExecuteResult execute_select(SelectStatement* select_statement) {
+ExecuteResult execute_select(const SelectStatement* select_statement) {
     Table* table = find_table(&global_db, select_statement->table_name);
-    TableSchema* schema = &(table->schema);
+    TableSchema* schema = &table->schema;
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
 
@@ -355,12 +395,43 @@ ExecuteResult execute_select(SelectStatement* select_statement) {
         printf(")\n\n");
     }
 
+     //TODO-- BUG: for some reason select_statement->conditions[i].column_index
+     //TODO-- and select_statement->conditions[i].value gets deprecated here
+    if (select_statement->has_condition) {
+        for (uint32_t i = 0; i < table->num_rows; i++) {
+            uint32_t index = select_statement->conditions[i].column_index;
+            if (schema->columns[index].type == COLUMN_INT) {
+                int32_t val;
+                memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
+
+                char *endptr;
+                char* value = select_statement->conditions[i].value;
+
+                const long int num = strtol(value, &endptr, 10);
+                if (endptr == value || *endptr != '\0') continue;
+                if (num == val) print_row(&table->schema, &row, select_statement);
+
+            }
+            else if (schema->columns[index].type == COLUMN_VARCHAR) {
+                char buf[257];
+                memcpy(buf, row.data + get_column_offset(schema, index), 256);
+                if (strcmp(buf, select_statement->conditions[i].value) == 0) print_row(&table->schema, &row, select_statement);
+
+            }
+
+        }
+        return EXECUTE_SUCCESS;
+
+
+    }
+
     for (uint32_t i = 0; i < table->num_rows; i++) {
         deserialize_row(&table->schema, row_slot(table, i), &row);
-        print_row(&table->schema, &row, select_statement->selected_col_indexes, select_statement->selected_col_count);
+        print_row(&table->schema, &row, select_statement);
     }
     free(row.data);
     return EXECUTE_SUCCESS;
+
 }
 
 ExecuteResult execute_create_table(const CreateStatement* create_statement) {
@@ -395,9 +466,10 @@ ExecuteResult execute_create_table(const CreateStatement* create_statement) {
 }
 
 
-void print_row(const TableSchema* schema, const Row* row, const uint32_t selected_col_indexes[MAX_COLUMNS], uint32_t selected_col_count) {
+void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement) {
+
     printf("(");
-    if (selected_col_count == 0) {
+    if (select_statement->selected_col_count == 0) {
         for (int i = 0; i < schema->num_columns; i++) {
             if (i > 0) printf(", ");
             if (schema->columns[i].type == COLUMN_INT) {
@@ -412,9 +484,9 @@ void print_row(const TableSchema* schema, const Row* row, const uint32_t selecte
             }
         }
     } else {
-        for (uint32_t i = 0; i < selected_col_count; i++) {
+        for (uint32_t i = 0; i < select_statement->selected_col_count; i++) {
             if (i > 0) printf(", ");
-            uint32_t index = selected_col_indexes[i];
+            uint32_t index = select_statement->selected_col_indexes[i];
             if (schema->columns[index].type == COLUMN_INT) {
                 int32_t val;
                 memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
@@ -428,6 +500,7 @@ void print_row(const TableSchema* schema, const Row* row, const uint32_t selecte
         }
     }
     printf(")\n");
+
 }
 
 
