@@ -111,14 +111,14 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
                 token = next_token(&lexer);
                 if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-                select_statement.conditions[index].column_name = token.text;
+                select_statement.conditions[index].column_name = strdup(token.text);
 
                 token = next_token(&lexer);
                 if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
 
                 token = next_token(&lexer);
                 if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-                select_statement.conditions[index].value = token.text;
+                select_statement.conditions[index].value = strdup(token.text);
 
                 index++;
                 select_statement.condition_count++;
@@ -127,7 +127,6 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                 if (token.type == TOKEN_AND) break;
                 if (token.type == TOKEN_SEMICOLON) break;
                 if (token.type == TOKEN_EOF) break;
-
 
             }
             select_statement.has_condition = 1;
@@ -162,7 +161,22 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             }
 
             select_statement.selected_col_count = col_index;
-        } else select_statement.selected_col_count = 0;
+        }
+        else {
+
+            select_statement.selected_col_count = 0;
+            for (uint32_t i = 0; i < schema.num_columns; i++ ) {
+
+                if (select_statement.has_condition) {
+                    for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
+                        if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
+                            select_statement.conditions[j].column_index = i;
+                        }
+                    }
+                }
+            }
+
+        }
 
 
 
@@ -399,24 +413,27 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
      //TODO-- and select_statement->conditions[i].value gets deprecated here
     if (select_statement->has_condition) {
         for (uint32_t i = 0; i < table->num_rows; i++) {
-            uint32_t index = select_statement->conditions[i].column_index;
-            if (schema->columns[index].type == COLUMN_INT) {
-                int32_t val;
-                memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
+            deserialize_row(&table->schema, row_slot(table, i), &row);
+            for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+                uint32_t index = select_statement->conditions[condition_index].column_index;
+                if (schema->columns[index].type == COLUMN_INT) {
+                    int32_t val;
+                    memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
 
-                char *endptr;
-                char* value = select_statement->conditions[i].value;
+                    char *endptr;
+                    char* value = select_statement->conditions[condition_index].value;
 
-                const long int num = strtol(value, &endptr, 10);
-                if (endptr == value || *endptr != '\0') continue;
-                if (num == val) print_row(&table->schema, &row, select_statement);
+                    const long int num = strtol(value, &endptr, 10);
+                    if (endptr == value || *endptr != '\0') continue;
+                    if (num == val) print_row(&table->schema, &row, select_statement);
 
-            }
-            else if (schema->columns[index].type == COLUMN_VARCHAR) {
-                char buf[257];
-                memcpy(buf, row.data + get_column_offset(schema, index), 256);
-                if (strcmp(buf, select_statement->conditions[i].value) == 0) print_row(&table->schema, &row, select_statement);
+                }
+                else if (schema->columns[index].type == COLUMN_VARCHAR) {
+                    char buf[257];
+                    memcpy(buf, row.data + get_column_offset(schema, index), 256);
+                    if (strcmp(buf, select_statement->conditions[i].value) == 0) print_row(&table->schema, &row, select_statement);
 
+                }
             }
 
         }
