@@ -124,9 +124,9 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
                 select_statement.condition_count++;
 
                 token = next_token(&lexer);
-                if (token.type == TOKEN_AND) break;
                 if (token.type == TOKEN_SEMICOLON) break;
                 if (token.type == TOKEN_EOF) break;
+                if (token.type != TOKEN_AND) break;
 
             }
             select_statement.has_condition = 1;
@@ -409,12 +409,12 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         printf(")\n\n");
     }
 
-     //TODO-- BUG: for some reason select_statement->conditions[i].column_index
-     //TODO-- and select_statement->conditions[i].value gets deprecated here
     if (select_statement->has_condition) {
         for (uint32_t i = 0; i < table->num_rows; i++) {
             deserialize_row(&table->schema, row_slot(table, i), &row);
+            int has_conditions = 1;
             for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+                if (!has_conditions) continue;
                 uint32_t index = select_statement->conditions[condition_index].column_index;
                 if (schema->columns[index].type == COLUMN_INT) {
                     int32_t val;
@@ -425,15 +425,20 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
                     const long int num = strtol(value, &endptr, 10);
                     if (endptr == value || *endptr != '\0') continue;
-                    if (num == val) print_row(&table->schema, &row, select_statement);
+                    if (num != val) has_conditions = 0;
+
 
                 }
                 else if (schema->columns[index].type == COLUMN_VARCHAR) {
                     char buf[257];
                     memcpy(buf, row.data + get_column_offset(schema, index), 256);
-                    if (strcmp(buf, select_statement->conditions[i].value) == 0) print_row(&table->schema, &row, select_statement);
+                    if (strcmp(buf, select_statement->conditions[condition_index].value) != 0) has_conditions = 0;
 
                 }
+            }
+
+            if (has_conditions) {
+                print_row(&table->schema, &row, select_statement);
             }
 
         }
