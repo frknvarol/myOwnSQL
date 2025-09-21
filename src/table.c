@@ -81,10 +81,15 @@ Table* new_table() {
 
 void free_table(Table* table) {
     for (int i = 0; i < TABLE_MAX_PAGES; i++) {
-        if (table->pages[i]) {
+        if (table->pages[i] != NULL) {
             free(table->pages[i]);
+            table->pages[i] = NULL;
         }
     }
-    free_tree(table->tree);
+
+    if (table->tree != NULL) {
+        free_tree(table->tree);
+        table->tree = NULL;
+    }
     free(table);
 }

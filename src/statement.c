@@ -46,7 +46,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
 
         int col_index = 0;
-        while (1) {
+        while (true) {
             token = next_token(&lexer);
 
             const ColumnType column_type = schema.columns[col_index].type;
@@ -107,7 +107,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         if (token.type == TOKEN_WHERE) {
             select_statement.condition_count = 0;
             uint32_t index = 0;
-            while (1) {
+            while (true) {
 
                 token = next_token(&lexer);
                 if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
@@ -193,7 +193,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         token = next_token(&lexer);
 
         if (token.type == TOKEN_TABLE) {
-            CreateStatement create_statement;
+            CreateTableStatement create_statement;
 
             token = next_token(&lexer);
             if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
@@ -286,7 +286,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
             statement->type = STATEMENT_CREATE_TABLE;
 
-            statement->create_stmt = create_statement;
+            statement->create_table_stmt = create_statement;
             return PREPARE_SUCCESS;
         }
 
@@ -300,6 +300,31 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
         }
 
     }
+
+    if (token.type == TOKEN_DROP) {
+        token = next_token(&lexer);
+        if (token.type != TOKEN_TABLE) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+
+        DropTableStatement drop_table_statement;
+        drop_table_statement.table_name = token.text;
+
+        statement->type = STATEMENT_DROP_TABLE;
+        statement->drop_table_stmt = drop_table_statement;
+        return PREPARE_SUCCESS;
+    }
+
+    if (token.type == TOKEN_SHOW) {
+        token = next_token(&lexer);
+        if (token.type != TOKEN_TABLES) return PREPARE_SYNTAX_ERROR;
+        token = next_token(&lexer);
+        if (token.type != TOKEN_EOF && token.type != TOKEN_SEMICOLON) return PREPARE_SYNTAX_ERROR;
+
+        statement->type = STATEMENT_SHOW_TABLES;
+        return PREPARE_SUCCESS;
+
+    }
+
 
     return PREPARE_UNRECOGNIZED_STATEMENT;
 }
@@ -323,7 +348,7 @@ void deserialize_row(const TableSchema* schema, void* source, Row* destination) 
     }
 }
 
-
+// Table row allocator function
 void* row_slot(Table* table, uint32_t row_num) {
     size_t row_size = compute_row_size(&table->schema);
     size_t rows_per_page = PAGE_SIZE / row_size;
@@ -354,7 +379,11 @@ ExecuteResult execute_statement(Statement* statement) {
         case STATEMENT_SELECT:
             return execute_select(&statement->select_stmt);
         case STATEMENT_CREATE_TABLE:
-            return execute_create_table(&statement->create_stmt);
+            return execute_create_table(&statement->create_table_stmt);
+        case STATEMENT_DROP_TABLE:
+            return execute_drop_table(&statement->drop_table_stmt);
+        case STATEMENT_SHOW_TABLES:
+            return execute_show_tables(&statement->show_tables_stmt);
     }
     return EXECUTE_SUCCESS;
 }
@@ -456,7 +485,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
 }
 
-ExecuteResult execute_create_table(const CreateStatement* create_statement) {
+ExecuteResult execute_create_table(const CreateTableStatement* create_statement) {
     Table* new_table = malloc(sizeof(Table));
     if (!new_table) {
         printf("Error: memory allocation failed.\n");
@@ -484,6 +513,34 @@ ExecuteResult execute_create_table(const CreateStatement* create_statement) {
 
     printf("Table %s created with %d columns.\n",
            new_table->name, new_table->schema.num_columns);
+    return EXECUTE_SUCCESS;
+}
+
+ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement) {
+    Table* table = find_table(&global_db, drop_table_statement->table_name);
+    if (table == NULL) {
+        return EXECUTE_FAIL;
+    }
+    free_table(table);
+
+    for (uint32_t i = 0; i < global_db.num_tables; i++) {
+        if (global_db.tables[i] == table) {
+            for (uint32_t j = i; j < global_db.num_tables - 1; j++) {
+                global_db.tables[j] = global_db.tables[j + 1];
+            }
+            global_db.tables[global_db.num_tables - 1] = NULL;
+            global_db.num_tables--;
+            break;
+        }
+    }
+
+    return EXECUTE_SUCCESS;
+}
+
+ExecuteResult execute_show_tables() {
+    for (uint32_t i = 0; i < global_db.num_tables; i++) {
+        printf("%s\n", global_db.tables[i]->name);
+    }
     return EXECUTE_SUCCESS;
 }
 
@@ -528,7 +585,7 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
 
 
 char* find_close_parenthesis(char* open_parenthesis) {
-    /*Function to find the closing parenthesis of an open parenthesis*/
+    /*Function to find the matching closing parenthesis of an open parenthesis*/
     int open_paren_count = 0;
 
     while (*open_parenthesis != '\0') {

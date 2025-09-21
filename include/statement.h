@@ -9,7 +9,11 @@
 typedef enum {
     STATEMENT_INSERT,
     STATEMENT_SELECT,
-    STATEMENT_CREATE_TABLE
+    STATEMENT_CREATE_TABLE,
+    STATEMENT_DROP_TABLE,
+    STATEMENT_SHOW_TABLES,
+    STATEMENT_CREATE_DATABASE,
+    STATEMENT_SHOW_DATABASES
 }StatementType;
 
 
@@ -34,7 +38,7 @@ typedef struct {
     uint32_t num_columns;
     Column columns[MAX_COLUMNS];
     uint32_t primary_col_index;
-} CreateStatement;
+} CreateTableStatement;
 
 typedef struct {
     char table_name[32];
@@ -51,11 +55,26 @@ typedef struct {
 } SelectStatement;
 
 typedef struct {
+    char database_name[32];
+} CreateDatabaseStatement;
+
+typedef struct {
+} ShowTablesStatement;
+
+typedef struct {
+    char* table_name;
+} DropTableStatement;
+
+
+typedef struct {
     StatementType type;
     union {
-        CreateStatement create_stmt;
+        CreateTableStatement create_table_stmt;
         InsertStatement insert_stmt;
         SelectStatement select_stmt;
+        DropTableStatement drop_table_stmt;
+        CreateDatabaseStatement create_database_stmt;
+        ShowTablesStatement show_tables_stmt;
     };
 } Statement;
 
@@ -75,13 +94,15 @@ typedef enum {
 typedef enum {
     EXECUTE_SUCCESS,
     EXECUTE_FAIL
-}ExecuteResult;
+} ExecuteResult;
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
 ExecuteResult execute_statement(Statement* statement);
 ExecuteResult execute_insert(InsertStatement* insert_statement);
 ExecuteResult execute_select(const SelectStatement* select_statement);
-ExecuteResult execute_create_table(const CreateStatement* create_statement);
+ExecuteResult execute_create_table(const CreateTableStatement* create_statement);
+ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement);
+ExecuteResult execute_show_tables();
 void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 char* find_close_parenthesis(char* open_parenthesis);
 
