@@ -1,6 +1,8 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include <stddef.h>
+
 typedef enum {
     TOKEN_SELECT, TOKEN_FROM, TOKEN_WHERE,
     TOKEN_INSERT, TOKEN_INTO, TOKEN_VALUES,

@@ -11,7 +11,7 @@ PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
         token = next_token(lexer);
         if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
         strncpy(insert_statement.table_name, token.text, sizeof(insert_statement.table_name));
-
+        // TODO check if table exists ( gives segmentation fault:11 otherwise)
         const Table* table = find_table(&global_db, token.text);
         const TableSchema schema = table->schema;
 
@@ -56,7 +56,7 @@ PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
 
             col_index++;
 
-            const Token next = next_token(&exer);
+            const Token next = next_token(lexer);
             if (strcmp(next.text, ")") == 0) break;
             if (next.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
         }
@@ -282,7 +282,9 @@ PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer
         }
         */
 
-    }
+    return PREPARE_UNRECOGNIZED_STATEMENT;
+
+}
 
 PrepareResult parse_drop(Lexer* lexer, Statement* statement, Token token) {
     token = next_token(lexer);
