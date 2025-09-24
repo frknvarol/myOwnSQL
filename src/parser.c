@@ -5,149 +5,131 @@
 
 PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     InsertStatement insert_statement;
+    token = next_token(lexer);
+    if (token.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
+
+    token = next_token(lexer);
+    if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+    strncpy(insert_statement.table_name, token.text, sizeof(insert_statement.table_name));
+    const Table* table = find_table(&global_db, token.text);
+    if (table == NULL) {
+        return PREPARE_TABLE_NOT_FOUND_ERROR;
+    }
+    const TableSchema schema = table->schema;
+
+    const Row* row = create_row(&table->schema);
+    insert_statement.row = *row;
+
+
+    token = next_token(lexer);
+    if (token.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
+
+    token = next_token(lexer);
+    if (token.type != TOKEN_OPEN_PAREN || strcmp(token.text, "(") != 0)
+        return PREPARE_SYNTAX_ERROR;
+
+
+    int col_index = 0;
+    while (1) {
         token = next_token(lexer);
-        if (token.type != TOKEN_INTO) return PREPARE_SYNTAX_ERROR;
 
-        token = next_token(lexer);
-        if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-        strncpy(insert_statement.table_name, token.text, sizeof(insert_statement.table_name));
-        // TODO check if table exists ( gives segmentation fault:11 otherwise)
-        const Table* table = find_table(&global_db, token.text);
-        const TableSchema schema = table->schema;
+        const ColumnType column_type = schema.columns[col_index].type;
 
-        const Row* row = create_row(&table->schema);
-        insert_statement.row = *row;
+        switch (column_type) {
+            case COLUMN_INT: {
+                char *endptr;
 
-
-        token = next_token(lexer);
-        if (token.type != TOKEN_VALUES) return PREPARE_SYNTAX_ERROR;
-
-        token = next_token(lexer);
-        if (token.type != TOKEN_OPEN_PAREN || strcmp(token.text, "(") != 0)
-            return PREPARE_SYNTAX_ERROR;
-
-
-        int col_index = 0;
-        while (1) {
-            token = next_token(lexer);
-
-            const ColumnType column_type = schema.columns[col_index].type;
-
-            switch (column_type) {
-                case COLUMN_INT: {
-                    char *endptr;
-
-                    const long int num = strtol(token.text, &endptr, 10);
-                    if (endptr == token.text || *endptr != '\0' || token.type != TOKEN_NUMBER) {
-                        return PREPARE_INSERT_TYPE_ERROR;
-                    }
-                    set_int_value(&table->schema, &insert_statement.row, col_index, (int32_t)num);
-                    break;
+                const long int num = strtol(token.text, &endptr, 10);
+                if (endptr == token.text || *endptr != '\0' || token.type != TOKEN_NUMBER) {
+                    return PREPARE_INSERT_TYPE_ERROR;
                 }
-                case COLUMN_VARCHAR: {
-                    if (token.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
-                    if (schema.columns[col_index].size < strlen(token.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
-                    set_text_value(&table->schema, &insert_statement.row, col_index, token.text);
-                    break;
-                }
-                default:
-                    return PREPARE_SYNTAX_ERROR;
+                set_int_value(&table->schema, &insert_statement.row, col_index, (int32_t)num);
+                break;
             }
-
-            col_index++;
-
-            const Token next = next_token(lexer);
-            if (strcmp(next.text, ")") == 0) break;
-            if (next.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+            case COLUMN_VARCHAR: {
+                if (token.type != TOKEN_STRING) return PREPARE_INSERT_TYPE_ERROR;
+                if (schema.columns[col_index].size < strlen(token.text)) return PREPARE_INSERT_VARCHAR_SIZE_ERROR;
+                set_text_value(&table->schema, &insert_statement.row, col_index, token.text);
+                break;
+            }
+            default:
+                return PREPARE_SYNTAX_ERROR;
         }
 
-        statement->type = STATEMENT_INSERT;
-        statement->insert_stmt = insert_statement;
-        return PREPARE_SUCCESS;
+        col_index++;
+
+        const Token next = next_token(lexer);
+        if (strcmp(next.text, ")") == 0) break;
+        if (next.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+    }
+
+    statement->type = STATEMENT_INSERT;
+    statement->insert_stmt = insert_statement;
+    return PREPARE_SUCCESS;
 }
 
 PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
-        SelectStatement select_statement;
-        select_statement.selected_col_count = 0;
+    SelectStatement select_statement;
+    select_statement.selected_col_count = 0;
 
-        Lexer selected_col_lexer = *lexer;
+    Lexer selected_col_lexer = *lexer;
+    token = next_token(lexer);
+
+    while (token.type != TOKEN_FROM) {
         token = next_token(lexer);
+    }
 
-        while (token.type != TOKEN_FROM) {
-            token = next_token(lexer);
-        }
+    token = next_token(lexer);
+    strncpy(select_statement.table_name, token.text, sizeof(select_statement.table_name));
 
-        token = next_token(lexer);
-        strncpy(select_statement.table_name, token.text, sizeof(select_statement.table_name));
+    Table* table = find_table(&global_db, token.text);
+    if (table == NULL) {
+        return PREPARE_TABLE_NOT_FOUND_ERROR;
+    }
+    const TableSchema schema = table->schema;
 
-        Table* table = find_table(&global_db, token.text);
-        const TableSchema schema = table->schema;
 
-
-        token = next_token(lexer);
+    token = next_token(lexer);
     select_statement.condition_count = 0;
-        if (token.type == TOKEN_WHERE) {
-            uint32_t index = 0;
-            while (1) {
+    if (token.type == TOKEN_WHERE) {
+        uint32_t index = 0;
+        while (1) {
 
-                token = next_token(lexer);
-                if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-                select_statement.conditions[index].column_name = strdup(token.text);
+            token = next_token(lexer);
+            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+            select_statement.conditions[index].column_name = strdup(token.text);
 
-                token = next_token(lexer);
-                if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
+            token = next_token(lexer);
+            if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
 
-                token = next_token(lexer);
-                if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-                select_statement.conditions[index].value = strdup(token.text);
+            token = next_token(lexer);
+            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
+            select_statement.conditions[index].value = strdup(token.text);
 
-                index++;
-                select_statement.condition_count++;
+            index++;
+            select_statement.condition_count++;
 
-                token = next_token(lexer);
-                if (token.type == TOKEN_SEMICOLON) break;
-                if (token.type == TOKEN_EOF) break;
-                if (token.type != TOKEN_AND) break;
+            token = next_token(lexer);
+            if (token.type == TOKEN_SEMICOLON) break;
+            if (token.type == TOKEN_EOF) break;
+            if (token.type != TOKEN_AND) break;
 
-            }
-            select_statement.has_condition = 1;
         }
-        else select_statement.has_condition = 0;
+        select_statement.has_condition = 1;
+    }
+    else select_statement.has_condition = 0;
 
-        Token col_token = next_token(&selected_col_lexer);
-        if (col_token.type != TOKEN_STAR) {
-            uint32_t col_index = 0;
-            while (col_token.type != TOKEN_FROM) {
-                if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-                for (uint32_t i = 0; i < schema.num_columns; i++ ) {
-                    if (strcmp(schema.columns[i].name, col_token.text) == 0) {
-                        select_statement.selected_col_indexes[col_index] = i;
-                        col_index++;
-                    }
-
-                    if (select_statement.has_condition) {
-                        for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
-                            if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
-                                select_statement.conditions[j].column_index = i;
-                            }
-                        }
-                    }
-                }
-                col_token = next_token(&selected_col_lexer);
-
-                if (col_token.type == TOKEN_FROM) break;
-                if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
-
-                col_token = next_token(&selected_col_lexer);
-            }
-
-            select_statement.selected_col_count = col_index;
-        }
-        else {
-
-            select_statement.selected_col_count = 0;
+    Token col_token = next_token(&selected_col_lexer);
+    if (col_token.type != TOKEN_STAR) {
+        uint32_t col_index = 0;
+        while (col_token.type != TOKEN_FROM) {
+            if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
             for (uint32_t i = 0; i < schema.num_columns; i++ ) {
+                if (strcmp(schema.columns[i].name, col_token.text) == 0) {
+                    select_statement.selected_col_indexes[col_index] = i;
+                    col_index++;
+                }
 
                 if (select_statement.has_condition) {
                     for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
@@ -157,130 +139,152 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
                     }
                 }
             }
+            col_token = next_token(&selected_col_lexer);
 
+            if (col_token.type == TOKEN_FROM) break;
+            if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+
+            col_token = next_token(&selected_col_lexer);
         }
 
+        select_statement.selected_col_count = col_index;
+    }
+    else {
+        select_statement.selected_col_count = 0;
+        for (uint32_t i = 0; i < schema.num_columns; i++ ) {
 
-        statement->type = STATEMENT_SELECT;
-        statement->select_stmt = select_statement;
+            if (select_statement.has_condition) {
+                for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
+                    if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
+                        select_statement.conditions[j].column_index = i;
+                    }
+                }
+            }
+        }
 
-        return PREPARE_SUCCESS;
+    }
+
+
+    statement->type = STATEMENT_SELECT;
+    statement->select_stmt = select_statement;
+
+    return PREPARE_SUCCESS;
     }
 
 
 PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer* input_buffer, Token token) {
 
+    token = next_token(lexer);
+
+    if (token.type == TOKEN_TABLE) {
+        CreateTableStatement create_statement;
+        create_statement.primary_col_index = -1;
+
         token = next_token(lexer);
+        if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+        strncpy(create_statement.table_name, token.text, sizeof(create_statement.table_name));
 
-        if (token.type == TOKEN_TABLE) {
-            CreateTableStatement create_statement;
-            create_statement.primary_col_index = -1;
+        token = next_token(lexer);
+        if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
 
+        char* open_paren = strchr(input_buffer->buffer, '(');
+        if (!open_paren) return PREPARE_SYNTAX_ERROR;
+
+        if (open_paren != strstr(input_buffer->buffer, token.text)) {
+            return PREPARE_SYNTAX_ERROR;
+        }
+
+        char* close_paren = find_close_parenthesis(open_paren);
+        if (!close_paren) return PREPARE_SYNTAX_ERROR;
+
+
+        char column_definitions[256];
+        strncpy(column_definitions, open_paren+ 1, close_paren - open_paren - 1);
+        column_definitions[close_paren - open_paren - 1] = '\0';
+
+        create_statement.num_columns = 0;
+        while (1) {
             token = next_token(lexer);
-            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            strncpy(create_statement.table_name, token.text, sizeof(create_statement.table_name));
 
-            token = next_token(lexer);
-            if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
+            if (token.type == TOKEN_IDENTIFIER) {
+                strcpy(create_statement.columns[create_statement.num_columns].name, token.text);
+                create_statement.columns[create_statement.num_columns].index = create_statement.num_columns;
 
-            char* open_paren = strchr(input_buffer->buffer, '(');
-            if (!open_paren) return PREPARE_SYNTAX_ERROR;
-
-            if (open_paren != strstr(input_buffer->buffer, token.text)) {
-                return PREPARE_SYNTAX_ERROR;
-            }
-
-            char* close_paren = find_close_parenthesis(open_paren);
-            if (!close_paren) return PREPARE_SYNTAX_ERROR;
-
-
-            char column_definitions[256];
-            strncpy(column_definitions, open_paren+ 1, close_paren - open_paren - 1);
-            column_definitions[close_paren - open_paren - 1] = '\0';
-
-            create_statement.num_columns = 0;
-            while (1) {
                 token = next_token(lexer);
-
-                if (token.type == TOKEN_IDENTIFIER) {
-                    strcpy(create_statement.columns[create_statement.num_columns].name, token.text);
-                    create_statement.columns[create_statement.num_columns].index = create_statement.num_columns;
-
-                    token = next_token(lexer);
-                    if (token.type == TOKEN_INT) {
-                        create_statement.columns[create_statement.num_columns].type = COLUMN_INT;
-                        create_statement.num_columns++;
-                    }
-
-                    else if (token.type == TOKEN_VARCHAR) {
-
-                        token = next_token(lexer);
-
-                        if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
-
-                        token = next_token(lexer);
-
-                        if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
-
-                        char *endptr;
-                        const long val = strtol(token.text, &endptr, 10);
-                        if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
-
-                        uint32_t size = (uint32_t)val;
-
-                        create_statement.columns[create_statement.num_columns].type = COLUMN_VARCHAR;
-                        create_statement.columns[create_statement.num_columns].size = size;
-
-                        token = next_token(lexer);
-                        if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
-                        create_statement.num_columns++;
-
-
-                    }
+                if (token.type == TOKEN_INT) {
+                    create_statement.columns[create_statement.num_columns].type = COLUMN_INT;
+                    create_statement.num_columns++;
                 }
 
-                else if (token.type == TOKEN_PRIMARY) {
-                    token = next_token(lexer);
-                    if (token.type != TOKEN_KEY) return PREPARE_SYNTAX_ERROR;
+                else if (token.type == TOKEN_VARCHAR) {
 
                     token = next_token(lexer);
+
                     if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
 
-
                     token = next_token(lexer);
-                    if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
 
+                    if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
 
-                    create_statement.primary_col_index = create_statement.num_columns;
+                    char *endptr;
+                    const long val = strtol(token.text, &endptr, 10);
+                    if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
+
+                    uint32_t size = (uint32_t)val;
+
+                    create_statement.columns[create_statement.num_columns].type = COLUMN_VARCHAR;
+                    create_statement.columns[create_statement.num_columns].size = size;
 
                     token = next_token(lexer);
                     if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
+                    create_statement.num_columns++;
+
 
                 }
+            }
+
+            else if (token.type == TOKEN_PRIMARY) {
+                token = next_token(lexer);
+                if (token.type != TOKEN_KEY) return PREPARE_SYNTAX_ERROR;
+
+                token = next_token(lexer);
+                if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
 
 
                 token = next_token(lexer);
+                if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
 
-                if (token.type == TOKEN_CLOSE_PAREN) break;
-                if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+
+                create_statement.primary_col_index = create_statement.num_columns;
+
+                token = next_token(lexer);
+                if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
+
             }
 
-            statement->type = STATEMENT_CREATE_TABLE;
 
-            statement->create_table_stmt = create_statement;
-            return PREPARE_SUCCESS;
-        }
-
-        //TODO add searching and selecting a database
-        /*
-        if (token.type == TOKEN_DATABASE) {
             token = next_token(lexer);
 
-            Database db;
-            init_database(&db, token.text);
-
+            if (token.type == TOKEN_CLOSE_PAREN) break;
+            if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
         }
-        */
+
+        statement->type = STATEMENT_CREATE_TABLE;
+
+        statement->create_table_stmt = create_statement;
+        return PREPARE_SUCCESS;
+    }
+
+    //TODO add searching and selecting a database
+    /*
+    if (token.type == TOKEN_DATABASE) {
+        token = next_token(lexer);
+
+        Database db;
+        init_database(&db, token.text);
+
+    }
+    */
 
     return PREPARE_UNRECOGNIZED_STATEMENT;
 
@@ -308,4 +312,58 @@ PrepareResult parse_show(Lexer* lexer, Statement* statement, Token token) {
     statement->type = STATEMENT_SHOW_TABLES;
     return PREPARE_SUCCESS;
 
+}
+
+// TODO BUG: gives bus error: 10 when given WHERE clause
+PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
+    DeleteStatement delete_statement;
+    delete_statement.condition_count = 0;
+    delete_statement.has_condition = 0;
+
+    token = next_token(lexer);
+    if (token.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
+
+    token = next_token(lexer);
+    if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+
+    strncpy(delete_statement.table_name, token.text, sizeof(delete_statement.table_name) - 1);
+    delete_statement.table_name[sizeof(delete_statement.table_name) - 1] = '\0';
+
+    token = next_token(lexer);
+    if (token.type == TOKEN_EOF || token.type == TOKEN_SEMICOLON) {
+        statement->type = STATEMENT_DELETE;
+        statement->delete_stmt = delete_statement;
+        return PREPARE_SUCCESS;
+    }
+
+    if (token.type == TOKEN_WHERE) {
+        uint32_t index = 0;
+        while (1) {
+
+            token = next_token(lexer);
+            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+            delete_statement.conditions[index].column_name = strdup(token.text);
+
+            token = next_token(lexer);
+            if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
+
+            token = next_token(lexer);
+            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
+            delete_statement.conditions[index].value = strdup(token.text);
+
+            index++;
+            delete_statement.condition_count++;
+
+            token = next_token(lexer);
+            if (token.type == TOKEN_SEMICOLON) break;
+            if (token.type == TOKEN_EOF) break;
+            if (token.type != TOKEN_AND) break;
+
+        }
+        delete_statement.has_condition = 1;
+    }
+
+    statement->type = STATEMENT_DELETE;
+    statement->delete_stmt = delete_statement;
+    return PREPARE_SUCCESS;
 }

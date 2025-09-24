@@ -6,10 +6,10 @@
 #include "input_buffer.h"
 
 
-MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+MetaCommandResult do_meta_command(const InputBuffer* input_buffer) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
-        close_input_buffer(input_buffer);
-        exit(EXIT_SUCCESS);
+        return META_COMMAND_EXIT;
+
     }
     if (strcmp(input_buffer->buffer, ".help") == 0) {
         printf("\nMeta-commands:\n");

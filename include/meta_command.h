@@ -5,9 +5,10 @@
 
 typedef enum {
     META_COMMAND_SUCCESS,
-    META_COMMAND_UNRECOGNIZED
+    META_COMMAND_UNRECOGNIZED,
+    META_COMMAND_EXIT
 } MetaCommandResult;
-MetaCommandResult do_meta_command(InputBuffer* input_buffer);
+MetaCommandResult do_meta_command(const InputBuffer* input_buffer);
 
 
 

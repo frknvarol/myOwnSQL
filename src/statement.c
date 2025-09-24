@@ -30,54 +30,13 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
             return parse_drop(&lexer, statement, token);
         case TOKEN_SHOW:
             return parse_show(&lexer, statement, token);
+        case TOKEN_DELETE:
+            return parse_delete(&lexer, statement, token);
         default:
             return PREPARE_UNRECOGNIZED_STATEMENT;
     }
 
    }
-
-
-
-void serialize_row(const TableSchema* schema, const Row* source, void* destination) {
-    size_t offset = 0;
-    for (int i = 0; i < schema->num_columns; i++) {
-        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
-        memcpy((char*)destination + offset, source->data + offset, col_size);
-        offset += col_size;
-    }
-}
-
-void deserialize_row(const TableSchema* schema, void* source, Row* destination) {
-    size_t offset = 0;
-    for (int i = 0; i < schema->num_columns; i++) {
-        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
-        memcpy(destination->data + offset, (char*)source + offset, col_size);
-        offset += col_size;
-    }
-}
-
-// Table row allocator function
-void* row_slot(Table* table, uint32_t row_num) {
-    size_t row_size = compute_row_size(&table->schema);
-    size_t rows_per_page = PAGE_SIZE / row_size;
-
-    size_t page_num = row_num / rows_per_page;
-    if (table->pages[page_num] == NULL) {
-        table->pages[page_num] = malloc(PAGE_SIZE);
-        if (!table->pages[page_num]) {
-            perror("malloc failed");
-            exit(1);
-        }
-    }
-    void* page = table->pages[page_num];
-
-
-    size_t row_offset = row_num % rows_per_page;
-    size_t byte_offset = row_offset * row_size;
-    return (char*)page + byte_offset;
-}
-
-
 
 
 ExecuteResult execute_statement(Statement* statement) {
@@ -91,7 +50,15 @@ ExecuteResult execute_statement(Statement* statement) {
         case STATEMENT_DROP_TABLE:
             return execute_drop_table(&statement->drop_table_stmt);
         case STATEMENT_SHOW_TABLES:
-            return execute_show_tables(&statement->show_tables_stmt);
+            return execute_show_tables();
+        case STATEMENT_DELETE:
+            return execute_delete(&statement->delete_stmt);
+        case STATEMENT_CREATE_DATABASE:
+            printf("CREATE DATABASE (to be completed)\n");
+            return EXECUTE_SUCCESS;
+        case STATEMENT_SHOW_DATABASES:
+            printf("SHOW DATABASES (to be completed)\n");
+            return EXECUTE_SUCCESS;
     }
     return EXECUTE_SUCCESS;
 }
@@ -148,6 +115,9 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
     if (select_statement->has_condition) {
         for (uint32_t i = 0; i < table->num_rows; i++) {
+            void* row_ptr = row_slot(table, i);
+            if (*(uint8_t*)row_ptr == 1) continue; // check if the row is deleted
+
             deserialize_row(&table->schema, row_slot(table, i), &row);
             int has_conditions = 1;
             for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
@@ -185,6 +155,8 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
     }
 
     for (uint32_t i = 0; i < table->num_rows; i++) {
+        void* row_ptr = row_slot(table, i);
+        if (*(uint8_t*)row_ptr == 1) continue; // check if the row is deleted
         deserialize_row(&table->schema, row_slot(table, i), &row);
         print_row(&table->schema, &row, select_statement);
     }
@@ -227,6 +199,7 @@ ExecuteResult execute_create_table(const CreateTableStatement* create_statement)
 ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement) {
     Table* table = find_table(&global_db, drop_table_statement->table_name);
     if (table == NULL) {
+        printf("Table not found.\n");
         return EXECUTE_FAIL;
     }
     free_table(table);
@@ -250,6 +223,85 @@ ExecuteResult execute_show_tables() {
         printf("%s\n", global_db.tables[i]->name);
     }
     return EXECUTE_SUCCESS;
+}
+
+ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
+
+    Table* table = find_table(&global_db, delete_statement->table_name);
+    const TableSchema* schema = &table->schema;
+    Row row;
+    row.data = malloc(compute_row_size(&table->schema));
+
+    if (delete_statement->has_condition) {
+        for (uint32_t i = 0; i < table->num_rows; i++) {
+            deserialize_row(&table->schema, row_slot(table, i), &row);
+            int has_conditions = 1;
+            for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index++) {
+                if (!has_conditions) continue;
+                uint32_t index = delete_statement->conditions[condition_index].column_index;
+                if (schema->columns[index].type == COLUMN_INT) {
+                    int32_t val;
+                    memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
+
+                    char *endptr;
+                    char* value = delete_statement->conditions[condition_index].value;
+
+                    const long int num = strtol(value, &endptr, 10);
+                    if (endptr == value || *endptr != '\0') continue;
+                    if (num != val) has_conditions = 0;
+
+
+                }
+                else if (schema->columns[index].type == COLUMN_VARCHAR) {
+                    char buf[257];
+                    memcpy(buf, row.data + get_column_offset(schema, index), 256);
+                    if (strcmp(buf, delete_statement->conditions[condition_index].value) != 0) has_conditions = 0;
+
+                }
+            }
+
+            if (has_conditions) {
+                delete_row(&row);
+            }
+
+        }
+        return EXECUTE_SUCCESS;
+
+
+    }
+
+    for (uint32_t i = 0; i < table->num_rows; i++) {
+        deserialize_row(&table->schema, row_slot(table, i), &row);
+        delete_row(&row);
+    }
+    return EXECUTE_SUCCESS;
+
+
+}
+
+
+
+
+
+
+char* find_close_parenthesis(char* open_parenthesis) {
+    /*Function to find the matching closing parenthesis of an open parenthesis*/
+    int open_paren_count = 0;
+
+    while (*open_parenthesis != '\0') {
+        open_parenthesis++;
+
+        if (*open_parenthesis == '(') {
+            open_paren_count++;
+        } else if (*open_parenthesis == ')') {
+            if (open_paren_count == 0) {
+                return open_parenthesis;
+            }
+            open_paren_count--;
+        }
+    }
+
+    return NULL;
 }
 
 
@@ -288,26 +340,4 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
     }
     printf(")\n");
 
-}
-
-
-
-char* find_close_parenthesis(char* open_parenthesis) {
-    /*Function to find the matching closing parenthesis of an open parenthesis*/
-    int open_paren_count = 0;
-
-    while (*open_parenthesis != '\0') {
-        open_parenthesis++;
-
-        if (*open_parenthesis == '(') {
-            open_paren_count++;
-        } else if (*open_parenthesis == ')') {
-            if (open_paren_count == 0) {
-                return open_parenthesis;
-            }
-            open_paren_count--;
-        }
-    }
-
-    return NULL;
 }

@@ -39,6 +39,7 @@ int is_keyword(const char *str, TokenType *type) {
     if (strcasecmp(str, "PRIMARY") == 0) { *type = TOKEN_PRIMARY; return 1; }
     if (strcasecmp(str, "AND") == 0) { *type = TOKEN_AND; return 1; }
     if (strcasecmp(str, "KEY") == 0) { *type = TOKEN_KEY; return 1; }
+    if (strcasecmp(str, "DELETE") == 0) { *type = TOKEN_DELETE; return 1; }
     if (strncasecmp(str, "VARCHAR", 7) == 0) { *type = TOKEN_VARCHAR; return 1; }
     if (strncasecmp(str, "INT", 3) == 0) { *type = TOKEN_INT; return 1; }
     if (strcasecmp(str, "DROP") == 0) { *type = TOKEN_DROP; return 1; }
@@ -60,7 +61,7 @@ Token make_token(const TokenType type, const char *text) {
 
 Token next_token(Lexer *lexer) {
     skip_whitespace(lexer);
-    char chr = peek(lexer);
+    const char chr = peek(lexer);
     if (chr == '\0') return make_token(TOKEN_EOF, "");
 
     if (chr == ',') { advance(lexer); return make_token(TOKEN_COMMA, ","); }

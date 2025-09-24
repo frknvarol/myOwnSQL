@@ -12,6 +12,12 @@ typedef struct {
     Table* tables[MAX_TABLES];
 } Database;
 
+/*
+typedef struct {
+    Database* db;
+} Session;
+*/
+
 extern Database global_db;
 
 void init_database(Database* db, const char* name);

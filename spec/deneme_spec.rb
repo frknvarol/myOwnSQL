@@ -16,21 +16,21 @@ RSpec.describe 'database' do
 
   it 'inserts and retrieves a row' do
     result = run_script([
-      "create table tablo (1 int, 2 text)",
+      "create table tablo (c1 int, c2 varchar(31))",
       "insert into tablo values (31, 'annen')",
       "select * from tablo",
       ".exit",
     ])
     expect(result).to match_array([
-      "db > (stub) You entered SQL: create table tablo (1 int, 2 text)",
-      "Table 'tablo' created with 2 columns.",
+      "> Table tablo created with 2 columns.",
       "Executed.",
-      "db > (stub) You entered SQL: insert into tablo values (31, 'annen')",
       "Executed.",
-      "db > (stub) You entered SQL: select * from tablo",
       "(31, annen)",
-      "Executed.",
-      "db > ",
+      "> COLUMNS:",
+      "(c1, c2)",
+      "",
+      "> Executed.",
+      "> ",
     ])
   end
 end

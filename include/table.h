@@ -20,6 +20,16 @@ typedef struct {
 
 #define MAX_COLUMNS 32
 
+#define PAGE_SIZE 4096
+#define TABLE_MAX_PAGES 100
+
+#define ROW_SIZE sizeof(Row)
+#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
+#define TABLE_MAX_ROWS (ROWS_PER_PAGE * TABLE_MAX_PAGES)
+
+
+#define TABLE_MAX_PAGES 100
+
 typedef struct {
     uint32_t num_columns;
     Column columns[MAX_COLUMNS];
@@ -56,5 +66,11 @@ int extract_primary_key(const TableSchema* schema, const Row* row, int pk_index)
 
 void free_table(Table* table);
 Table* new_table();
+void* row_slot(Table* table, uint32_t row_num);
+void delete_row(void* row);
+//void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
+void serialize_row(const TableSchema* schema, const Row* source, void* destination);
+void deserialize_row(const TableSchema* schema, void* source, Row* destination);
+
 
 #endif

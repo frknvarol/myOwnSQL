@@ -13,19 +13,10 @@ typedef enum {
     STATEMENT_DROP_TABLE,
     STATEMENT_SHOW_TABLES,
     STATEMENT_CREATE_DATABASE,
-    STATEMENT_SHOW_DATABASES
+    STATEMENT_SHOW_DATABASES,
+    STATEMENT_DELETE
 }StatementType;
 
-
-#define PAGE_SIZE 4096
-#define TABLE_MAX_PAGES 100
-
-#define ROW_SIZE sizeof(Row)
-#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
-#define TABLE_MAX_ROWS (ROWS_PER_PAGE * TABLE_MAX_PAGES)
-
-
-#define TABLE_MAX_PAGES 100
 
 typedef struct {
     char* column_name;
@@ -52,7 +43,7 @@ typedef struct {
     int has_condition;
     Condition conditions[MAX_COLUMNS];
     uint32_t condition_count;
-} SelectStatement;
+} SelectStatement; // TODO free memory after use
 
 typedef struct {
     char database_name[32];
@@ -65,6 +56,13 @@ typedef struct {
     char* table_name;
 } DropTableStatement;
 
+typedef struct {
+    char table_name[32];
+    int has_condition;
+    Condition conditions[MAX_COLUMNS];
+    uint32_t condition_count;
+} DeleteStatement; // TODO free memory after use
+
 
 typedef struct {
     StatementType type;
@@ -75,12 +73,11 @@ typedef struct {
         DropTableStatement drop_table_stmt;
         CreateDatabaseStatement create_database_stmt;
         ShowTablesStatement show_tables_stmt;
+        DeleteStatement delete_stmt;
     };
 } Statement;
 
 
-void serialize_row(const TableSchema* schema, const Row* source, void* destination);
-void deserialize_row(const TableSchema* schema, void* source, Row* destination);
 
 
 typedef enum {
@@ -88,7 +85,8 @@ typedef enum {
     PREPARE_UNRECOGNIZED_STATEMENT,
     PREPARE_SYNTAX_ERROR,
     PREPARE_INSERT_TYPE_ERROR,
-    PREPARE_INSERT_VARCHAR_SIZE_ERROR
+    PREPARE_INSERT_VARCHAR_SIZE_ERROR,
+    PREPARE_TABLE_NOT_FOUND_ERROR
 } PrepareResult;
 
 typedef enum {
@@ -103,6 +101,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement);
 ExecuteResult execute_create_table(const CreateTableStatement* create_statement);
 ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement);
 ExecuteResult execute_show_tables();
+ExecuteResult execute_delete(const DeleteStatement* delete_statement);
 void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 char* find_close_parenthesis(char* open_parenthesis);
 
