@@ -129,7 +129,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                     memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
 
                     char *endptr;
-                    char* value = select_statement->conditions[condition_index].value;
+                    const char* value = select_statement->conditions[condition_index].value;
 
                     const long int num = strtol(value, &endptr, 10);
                     if (endptr == value || *endptr != '\0') continue;
@@ -150,6 +150,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
             }
 
         }
+        free(row.data);
         return EXECUTE_SUCCESS;
 
 
@@ -241,7 +242,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
         if (delete_statement->has_condition) {
             int has_conditions = 1;
 
-            for (uint32_t condition_index = 0; condition_index  < delete_statement->condition_count; condition_index ++) {
+            for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index ++) {
                 uint32_t col_index = delete_statement->conditions[condition_index].column_index;
 
                 if (schema->columns[col_index].type == COLUMN_INT) {

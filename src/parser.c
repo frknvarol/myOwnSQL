@@ -99,14 +99,16 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
             token = next_token(lexer);
             if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            select_statement.conditions[index].column_name = strdup(token.text);
+            strncpy(select_statement.conditions[index].column_name, token.text, sizeof(select_statement.conditions[index].column_name) - 1);
+            select_statement.conditions[index].column_name[sizeof(select_statement.conditions[index].column_name) - 1] = '\0';
 
             token = next_token(lexer);
             if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-            select_statement.conditions[index].value = strdup(token.text);
+            strncpy(select_statement.conditions[index].value, token.text, sizeof(select_statement.conditions[index].value) - 1);
+            select_statement.conditions[index].value[sizeof(select_statement.conditions[index].value) - 1] = '\0';
 
             index++;
             select_statement.condition_count++;
@@ -348,14 +350,18 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
 
             token = next_token(lexer);
             if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            delete_statement.conditions[index].column_name = strdup(token.text);
+            strncpy(delete_statement.conditions[index].column_name, token.text, sizeof(delete_statement.conditions[index].column_name) - 1);
+            delete_statement.conditions[index].column_name[sizeof(delete_statement.conditions[index].column_name) - 1] = '\0';
+
 
             token = next_token(lexer);
             if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-            delete_statement.conditions[index].value = strdup(token.text);
+            strncpy(delete_statement.conditions[index].value, token.text, sizeof(delete_statement.conditions[index].value) - 1);
+            delete_statement.conditions[index].value[sizeof(delete_statement.conditions[index].value) - 1] = '\0';
+
 
             index++;
             delete_statement.condition_count++;
