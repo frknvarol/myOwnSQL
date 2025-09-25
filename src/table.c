@@ -43,12 +43,12 @@ size_t get_column_offset(const TableSchema* schema, int col_index) {
 
 
 
-void set_int_value(const TableSchema* schema, Row* row, int col_index, int32_t value) {
-    size_t offset = get_column_offset(schema, col_index);
+void set_int_value(const TableSchema* schema, const Row* row, const int col_index, const int32_t value) {
+    const size_t offset = get_column_offset(schema, col_index);
     memcpy(row->data + offset, &value, sizeof(int32_t));
 }
 
-void set_text_value(const TableSchema* schema, Row* row, int col_index, const char* text) {
+void set_text_value(const TableSchema* schema, const Row* row, const int col_index, const char* text) {
     const size_t offset = get_column_offset(schema, col_index);
     size_t max_size = 0;
 
@@ -136,7 +136,7 @@ void serialize_row(const TableSchema* schema, const Row* source, void* destinati
 }
 
 
-void deserialize_row(const TableSchema* schema, void* source, Row* destination) {
+void deserialize_row(const TableSchema* schema, void* source, const Row* destination) {
     size_t page_offset = 1;  // skip deletion flag in page
     size_t row_offset = 0;   // start of Row->data
 

@@ -13,7 +13,7 @@ void init_database(Database* db, const char* name) {
     }
 }
 
-Table* find_table(Database* db, const char* table_name) {
+Table* find_table(const Database* db, const char* table_name) {
     for (uint32_t i = 0; i < db->num_tables; i++) {
         if (strcmp(db->tables[i]->name, table_name) == 0) {
             return db->tables[i];

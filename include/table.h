@@ -46,8 +46,8 @@ Row* create_row(const TableSchema* schema);
 
 size_t get_column_offset(const TableSchema* schema, int col_index);
 
-void set_int_value(const TableSchema* schema, Row* row, int col_index, int32_t value);
-void set_text_value(const TableSchema* schema, Row* row, int col_index, const char* text);
+void set_int_value(const TableSchema* schema, const Row* row, int col_index, int32_t value);
+void set_text_value(const TableSchema* schema, const Row* row, int col_index, const char* text);
 
 
 #define TABLE_MAX_PAGES 100
@@ -69,7 +69,7 @@ Table* new_table();
 void* row_slot(Table* table, uint32_t row_num);
 void delete_row(void* row);
 void serialize_row(const TableSchema* schema, const Row* source, void* destination);
-void deserialize_row(const TableSchema* schema, void* source, Row* destination);
+void deserialize_row(const TableSchema* schema, void* source, const Row* destination);
 int32_t get_column_index(const TableSchema* schema, const char* column_name);
 
 #endif

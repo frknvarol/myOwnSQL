@@ -70,7 +70,7 @@ ExecuteResult execute_insert(InsertStatement* insert_statement) {
         return EXECUTE_FAIL;
     }
 
-    Row* row_to_insert = &(insert_statement->row);
+    const Row* row_to_insert = &insert_statement->row;
     void* destination = row_slot(table, table->num_rows);
 
     serialize_row(&table->schema, row_to_insert, destination);
@@ -114,16 +114,15 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
     }
 
     if (select_statement->has_condition) {
-        for (uint32_t i = 0; i < table->num_rows; i++) {
-            void* row_ptr = row_slot(table, i);
-            //uint8_t deleted = *(uint8_t*)row_ptr;
+        for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
+            void* row_ptr = row_slot(table, row_index);
             if (*(uint8_t*)row_ptr) continue;
 
-            deserialize_row(&table->schema, row_slot(table, i), &row);
+            deserialize_row(&table->schema, row_slot(table, row_index), &row);
             int has_conditions = 1;
             for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
                 if (!has_conditions) continue;
-                uint32_t index = select_statement->conditions[condition_index].column_index;
+                const uint32_t index = select_statement->conditions[condition_index].column_index;
                 if (schema->columns[index].type == COLUMN_INT) {
                     int32_t val;
                     memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
@@ -132,8 +131,8 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                     const char* value = select_statement->conditions[condition_index].value;
 
                     const long int num = strtol(value, &endptr, 10);
-                    if (endptr == value || *endptr != '\0') continue;
-                    if (num != val) has_conditions = 0;
+                    if (endptr == value || *endptr != '\0' || num != val) has_conditions = 0;
+
 
 
                 }
@@ -143,14 +142,20 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                     if (strcmp(buf, select_statement->conditions[condition_index].value) != 0) has_conditions = 0;
 
                 }
+
             }
 
             if (has_conditions) {
                 print_row(&table->schema, &row, select_statement);
             }
 
+
         }
         free(row.data);
+        for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+            free(select_statement->conditions[condition_index].value);
+            free(select_statement->conditions[condition_index].column_name);
+        }
         return EXECUTE_SUCCESS;
 
 
@@ -158,7 +163,6 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
     for (uint32_t i = 0; i < table->num_rows; i++) {
         void* row_ptr = row_slot(table, i);
-        //uint8_t deleted = *(uint8_t*)row_ptr;
         if (*(uint8_t*)row_ptr) continue;
         deserialize_row(&table->schema, row_slot(table, i), &row);
         print_row(&table->schema, &row, select_statement);
@@ -250,7 +254,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
                     memcpy(&val, (char*)row_ptr + 1 + get_column_offset(schema, col_index), sizeof(int32_t));
 
                     char* endptr;
-                    long target = strtol(delete_statement->conditions[condition_index ].value, &endptr, 10);
+                    const long target = strtol(delete_statement->conditions[condition_index ].value, &endptr, 10);
                     if (endptr == delete_statement->conditions[condition_index ].value || *endptr != '\0' || val != (int32_t)target) {
                         has_conditions = 0;
                         break;
@@ -263,10 +267,16 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
                         break;
                     }
                 }
+
             }
 
             if (has_conditions) {
                 *(uint8_t*)row_ptr = 1;
+            }
+
+            for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index++) {
+                free(delete_statement->conditions[condition_index].value);
+                free(delete_statement->conditions[condition_index].column_name);
             }
 
         } else {

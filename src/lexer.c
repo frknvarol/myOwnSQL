@@ -11,7 +11,7 @@ void init_lexer(Lexer *lexer, const char *input) {
     lexer->length = strlen(input);
 }
 
-char peek(Lexer *lexer) {
+char peek(const Lexer *lexer) {
     if (lexer->pos >= lexer->length) return '\0';
     return lexer->input[lexer->pos];
 }

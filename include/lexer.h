@@ -29,7 +29,7 @@ typedef struct {
 } Lexer;
 
 void init_lexer(Lexer *lexer, const char *input);
-char peek(Lexer *lexer);
+char peek(const Lexer *lexer);
 char advance(Lexer *lexer);
 void skip_whitespace(Lexer *lexer);
 int is_keyword(const char *str, TokenType *type);

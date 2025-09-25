@@ -17,9 +17,9 @@ typedef struct {
     int indexed_col;
 } BPTree;
 
-void* bpt_search(BPTreeNode* root, int key);
+void* bpt_search(const BPTreeNode* root, int key);
 BPTreeNode* create_node(int is_leaf);
-void bpt_insert_internal(BPTree* tree, BPTreeNode* parent, int key, BPTreeNode* right_child);
+void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, int key, BPTreeNode* right_child);
 void bpt_insert(BPTree* tree, int key, void* row_ptr);
 
 void free_node(BPTreeNode* node);

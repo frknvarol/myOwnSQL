@@ -19,9 +19,9 @@ typedef enum {
 
 
 typedef struct {
-    char column_name[32];
+    char* column_name;
     uint32_t column_index;
-    char value[256];
+    char* value;
 } Condition;
 
 typedef struct {

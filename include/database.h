@@ -21,7 +21,7 @@ typedef struct {
 extern Database global_db;
 
 void init_database(Database* db, const char* name);
-Table* find_table(Database* db, const char* table_name);
+Table* find_table(const Database* db, const char* table_name);
 int add_table(Database* db, Table* table);
 
 #endif
