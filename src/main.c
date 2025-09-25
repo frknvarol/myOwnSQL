@@ -20,6 +20,7 @@ int main(void) {
                     break;
                 case META_COMMAND_UNRECOGNIZED:
                     printf("Unrecognized meta-command '%s'\n", input_buffer->buffer);
+                    break;
                 case META_COMMAND_EXIT:
                     close_input_buffer(input_buffer);
                     exit(EXIT_SUCCESS);
@@ -30,22 +31,27 @@ int main(void) {
 
         Statement statement;
         switch (prepare_statement(input_buffer, &statement)) {
-            case (PREPARE_SUCCESS):
+            case PREPARE_SUCCESS:
                 break;
-            case (PREPARE_SYNTAX_ERROR):
+            case PREPARE_SYNTAX_ERROR:
                 printf("Syntax error. Could not parse statement.\n");
+                free_statement(&statement);
                 continue;
-            case (PREPARE_UNRECOGNIZED_STATEMENT):
+            case PREPARE_UNRECOGNIZED_STATEMENT:
                 printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
+                free_statement(&statement);
                 continue;
-            case (PREPARE_INSERT_TYPE_ERROR):
+            case PREPARE_INSERT_TYPE_ERROR:
                 printf("Insert type error.\n");
+                free_statement(&statement);
                 continue;
-            case (PREPARE_INSERT_VARCHAR_SIZE_ERROR):
+            case PREPARE_INSERT_VARCHAR_SIZE_ERROR:
                 printf("The size of the VARCHAR given is larger than the determined size.\n");
+                free_statement(&statement);
                 continue;
-            case (PREPARE_TABLE_NOT_FOUND_ERROR):
+            case PREPARE_TABLE_NOT_FOUND_ERROR:
                 printf("Table not found.\n");
+                free_statement(&statement);
                 continue;
             }
 
