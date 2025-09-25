@@ -116,7 +116,8 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
     if (select_statement->has_condition) {
         for (uint32_t i = 0; i < table->num_rows; i++) {
             void* row_ptr = row_slot(table, i);
-            if (*(uint8_t*)row_ptr == 1) continue; // check if the row is deleted
+            //uint8_t deleted = *(uint8_t*)row_ptr;
+            if (*(uint8_t*)row_ptr) continue;
 
             deserialize_row(&table->schema, row_slot(table, i), &row);
             int has_conditions = 1;
@@ -156,7 +157,8 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
     for (uint32_t i = 0; i < table->num_rows; i++) {
         void* row_ptr = row_slot(table, i);
-        if (*(uint8_t*)row_ptr == 1) continue; // check if the row is deleted
+        //uint8_t deleted = *(uint8_t*)row_ptr;
+        if (*(uint8_t*)row_ptr) continue;
         deserialize_row(&table->schema, row_slot(table, i), &row);
         print_row(&table->schema, &row, select_statement);
     }
@@ -225,58 +227,53 @@ ExecuteResult execute_show_tables() {
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
 
+ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
     Table* table = find_table(&global_db, delete_statement->table_name);
     const TableSchema* schema = &table->schema;
-    Row row;
-    row.data = malloc(compute_row_size(&table->schema));
 
-    if (delete_statement->has_condition) {
-        for (uint32_t i = 0; i < table->num_rows; i++) {
-            deserialize_row(&table->schema, row_slot(table, i), &row);
+    for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
+        void* row_ptr = row_slot(table, row_index);
+
+        //skips already deleted rows
+        if (*(uint8_t*)row_ptr) continue;
+
+        if (delete_statement->has_condition) {
             int has_conditions = 1;
-            for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index++) {
-                if (!has_conditions) continue;
-                uint32_t index = delete_statement->conditions[condition_index].column_index;
-                if (schema->columns[index].type == COLUMN_INT) {
+
+            for (uint32_t condition_index = 0; condition_index  < delete_statement->condition_count; condition_index ++) {
+                uint32_t col_index = delete_statement->conditions[condition_index].column_index;
+
+                if (schema->columns[col_index].type == COLUMN_INT) {
                     int32_t val;
-                    memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
+                    memcpy(&val, (char*)row_ptr + 1 + get_column_offset(schema, col_index), sizeof(int32_t));
 
-                    char *endptr;
-                    char* value = delete_statement->conditions[condition_index].value;
-
-                    const long int num = strtol(value, &endptr, 10);
-                    if (endptr == value || *endptr != '\0') continue;
-                    if (num != val) has_conditions = 0;
-
-
-                }
-                else if (schema->columns[index].type == COLUMN_VARCHAR) {
-                    char buf[257];
-                    memcpy(buf, row.data + get_column_offset(schema, index), 256);
-                    if (strcmp(buf, delete_statement->conditions[condition_index].value) != 0) has_conditions = 0;
-
+                    char* endptr;
+                    long target = strtol(delete_statement->conditions[condition_index ].value, &endptr, 10);
+                    if (endptr == delete_statement->conditions[condition_index ].value || *endptr != '\0' || val != (int32_t)target) {
+                        has_conditions = 0;
+                        break;
+                    }
+                } else if (schema->columns[col_index].type == COLUMN_VARCHAR) {
+                    char buf[257] = {0};
+                    memcpy(buf, (char*)row_ptr + 1 + get_column_offset(schema, col_index), schema->columns[col_index].size);
+                    if (strcmp(buf, delete_statement->conditions[condition_index ].value) != 0) {
+                        has_conditions = 0;
+                        break;
+                    }
                 }
             }
 
             if (has_conditions) {
-                delete_row(&row);
+                *(uint8_t*)row_ptr = 1;
             }
 
+        } else {
+            *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
         }
-        return EXECUTE_SUCCESS;
-
-
     }
 
-    for (uint32_t i = 0; i < table->num_rows; i++) {
-        deserialize_row(&table->schema, row_slot(table, i), &row);
-        delete_row(&row);
-    }
     return EXECUTE_SUCCESS;
-
-
 }
 
 

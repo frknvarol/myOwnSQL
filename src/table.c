@@ -97,7 +97,7 @@ void free_table(Table* table) {
 
 // Table row allocator function
 void* row_slot(Table* table, uint32_t row_num) {
-    size_t row_size = compute_row_size(&table->schema);
+    size_t row_size = compute_row_size(&table->schema) + 1;
     size_t rows_per_page = PAGE_SIZE / row_size;
 
     size_t page_num = row_num / rows_per_page;
@@ -117,64 +117,50 @@ void* row_slot(Table* table, uint32_t row_num) {
 }
 
 void serialize_row(const TableSchema* schema, const Row* source, void* destination) {
+    // First byte = deleted flag
+    *((uint8_t*)destination) = 0; // 0 = active, 1 = deleted
 
-    *(uint8_t*)destination = 0;
+    size_t page_offset = 1;  // skip flag in destination
+    size_t row_offset = 0;   // start from beginning of Row->data
 
-    size_t offset = 1;
     for (int i = 0; i < schema->num_columns; i++) {
-        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
-        memcpy((char*)destination + offset, source->data + offset, col_size);
-        offset += col_size;
+        size_t col_size = (schema->columns[i].type == COLUMN_INT)
+                              ? sizeof(int32_t)
+                              : schema->columns[i].size;
+
+        memcpy((char*)destination + page_offset, source->data + row_offset, col_size);
+
+        row_offset  += col_size;
+        page_offset += col_size;
     }
 }
+
 
 void deserialize_row(const TableSchema* schema, void* source, Row* destination) {
-    size_t offset = 0;
+    size_t page_offset = 1;  // skip deletion flag in page
+    size_t row_offset = 0;   // start of Row->data
+
     for (int i = 0; i < schema->num_columns; i++) {
-        size_t col_size = (schema->columns[i].type == COLUMN_INT) ? sizeof(int32_t) : 256;
-        memcpy(destination->data + offset, (char*)source + offset, col_size);
-        offset += col_size;
+        size_t col_size = (schema->columns[i].type == COLUMN_INT)
+                              ? sizeof(int32_t)
+                              : schema->columns[i].size;
+
+        memcpy(destination->data + row_offset, (char*)source + page_offset, col_size);
+
+        row_offset  += col_size;
+        page_offset += col_size;
     }
 }
 
-/*
-void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement) {
-
-    printf("(");
-    if (select_statement->selected_col_count == 0) {
-        for (int i = 0; i < schema->num_columns; i++) {
-            if (i > 0) printf(", ");
-            if (schema->columns[i].type == COLUMN_INT) {
-                int32_t val;
-                memcpy(&val, row->data + get_column_offset(schema, i), sizeof(int32_t));
-                printf("%d", val);
-            } else if (schema->columns[i].type == COLUMN_VARCHAR){
-                char buf[257];
-                memcpy(buf, row->data + get_column_offset(schema, i), 256);
-                buf[256] = '\0';
-                printf("%s", buf);
-            }
-        }
-    } else {
-        for (uint32_t i = 0; i < select_statement->selected_col_count; i++) {
-            if (i > 0) printf(", ");
-            uint32_t index = select_statement->selected_col_indexes[i];
-            if (schema->columns[index].type == COLUMN_INT) {
-                int32_t val;
-                memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
-                printf("%d", val);
-            } else if (schema->columns[index].type == COLUMN_VARCHAR){
-                char buf[257];
-                memcpy(buf, row->data + get_column_offset(schema, index), 256);
-                buf[256] = '\0';
-                printf("%s", buf);
-            }
-        }
-    }
-    printf(")\n");
-
-}
-*/
-void delete_row(void* row) { // TODO BUG: doesn't work for some reason
+void delete_row(void* row) {
     *(uint8_t*)row = 1; // mark as deleted
+}
+
+int32_t get_column_index(const TableSchema* schema, const char* column_name) {
+    for (int32_t i = 0; i < schema->num_columns; i++) {
+        if (strcmp(schema->columns[i].name, column_name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }

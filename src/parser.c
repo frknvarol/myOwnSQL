@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "database.h"
+#include "table.h"
 
 PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     InsertStatement insert_statement;
@@ -314,7 +315,6 @@ PrepareResult parse_show(Lexer* lexer, Statement* statement, Token token) {
 
 }
 
-// TODO BUG: gives bus error: 10 when given WHERE clause
 PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
     DeleteStatement delete_statement;
     delete_statement.condition_count = 0;
@@ -325,6 +325,12 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
 
     token = next_token(lexer);
     if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+
+    Table* table = find_table(&global_db, token.text);
+    if (table == NULL) {
+        return PREPARE_TABLE_NOT_FOUND_ERROR;
+    }
+    const TableSchema schema = table->schema;
 
     strncpy(delete_statement.table_name, token.text, sizeof(delete_statement.table_name) - 1);
     delete_statement.table_name[sizeof(delete_statement.table_name) - 1] = '\0';
@@ -363,6 +369,15 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
         delete_statement.has_condition = 1;
     }
 
+
+
+    if (delete_statement.has_condition) {
+        for (int32_t j = 0; j < delete_statement.condition_count; j++) {
+            int32_t col_index = get_column_index(&schema, delete_statement.conditions[j].column_name);
+            if (col_index < 0) return PREPARE_SYNTAX_ERROR;
+            delete_statement.conditions[j].column_index = col_index;
+        }
+    }
     statement->type = STATEMENT_DELETE;
     statement->delete_stmt = delete_statement;
     return PREPARE_SUCCESS;

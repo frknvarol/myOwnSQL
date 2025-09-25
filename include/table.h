@@ -68,9 +68,8 @@ void free_table(Table* table);
 Table* new_table();
 void* row_slot(Table* table, uint32_t row_num);
 void delete_row(void* row);
-//void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 void serialize_row(const TableSchema* schema, const Row* source, void* destination);
 void deserialize_row(const TableSchema* schema, void* source, Row* destination);
-
+int32_t get_column_index(const TableSchema* schema, const char* column_name);
 
 #endif
