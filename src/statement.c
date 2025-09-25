@@ -39,7 +39,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
    }
 
 
-ExecuteResult execute_statement(Statement* statement) {
+ExecuteResult execute_statement(const Statement* statement) {
     switch (statement->type) {
         case STATEMENT_INSERT:
             return execute_insert(&statement->insert_stmt);
@@ -63,7 +63,7 @@ ExecuteResult execute_statement(Statement* statement) {
     return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_insert(InsertStatement* insert_statement) {
+ExecuteResult execute_insert(const InsertStatement* insert_statement) {
     Table* table = find_table(&global_db, insert_statement->table_name);
 
     if (table->num_rows >= TABLE_MAX_ROWS) {
@@ -152,10 +152,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
 
         }
         free(row.data);
-        for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
-            free(select_statement->conditions[condition_index].value);
-            free(select_statement->conditions[condition_index].column_name);
-        }
+
         return EXECUTE_SUCCESS;
 
 
@@ -274,10 +271,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
                 *(uint8_t*)row_ptr = 1;
             }
 
-            for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index++) {
-                free(delete_statement->conditions[condition_index].value);
-                free(delete_statement->conditions[condition_index].column_name);
-            }
+
 
         } else {
             *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
@@ -348,4 +342,23 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
     }
     printf(")\n");
 
+}
+
+
+void free_statement(const Statement* statement) {
+    switch (statement->type) {
+        case STATEMENT_SELECT:
+            for (uint32_t condition_index = 0; condition_index < statement->select_stmt.condition_count; condition_index++) {
+                free(statement->select_stmt.conditions[condition_index].value);
+                free(statement->select_stmt.conditions[condition_index].column_name);
+            }
+            break;
+        case STATEMENT_DELETE:
+            for (uint32_t condition_index = 0; condition_index < statement->delete_stmt.condition_count; condition_index++) {
+                free(statement->delete_stmt.conditions[condition_index].value);
+                free(statement->delete_stmt.conditions[condition_index].column_name);
+            }
+            break;
+        default:;
+    }
 }

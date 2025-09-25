@@ -43,7 +43,7 @@ typedef struct {
     int has_condition;
     Condition conditions[MAX_COLUMNS];
     uint32_t condition_count;
-} SelectStatement; // TODO free memory after use
+} SelectStatement;
 
 typedef struct {
     char database_name[32];
@@ -53,7 +53,7 @@ typedef struct {
 } ShowTablesStatement;
 
 typedef struct {
-    char* table_name;
+    char table_name[32];
 } DropTableStatement;
 
 typedef struct {
@@ -61,7 +61,7 @@ typedef struct {
     int has_condition;
     Condition conditions[MAX_COLUMNS];
     uint32_t condition_count;
-} DeleteStatement; // TODO free memory after use
+} DeleteStatement;
 
 
 typedef struct {
@@ -95,8 +95,8 @@ typedef enum {
 } ExecuteResult;
 
 PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* statement);
-ExecuteResult execute_statement(Statement* statement);
-ExecuteResult execute_insert(InsertStatement* insert_statement);
+ExecuteResult execute_statement(const Statement* statement);
+ExecuteResult execute_insert(const InsertStatement* insert_statement);
 ExecuteResult execute_select(const SelectStatement* select_statement);
 ExecuteResult execute_create_table(const CreateTableStatement* create_statement);
 ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement);
@@ -104,7 +104,7 @@ ExecuteResult execute_show_tables();
 ExecuteResult execute_delete(const DeleteStatement* delete_statement);
 void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 char* find_close_parenthesis(char* open_parenthesis);
-
+void free_statement(const Statement* statement);
 
 
 

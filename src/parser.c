@@ -297,7 +297,9 @@ PrepareResult parse_drop(Lexer* lexer, Statement* statement, Token token) {
     token = next_token(lexer);
 
     DropTableStatement drop_table_statement;
-    drop_table_statement.table_name = token.text;
+
+    strncpy(drop_table_statement.table_name, token.text, sizeof(drop_table_statement.table_name) - 1);
+    drop_table_statement.table_name[sizeof(drop_table_statement.table_name) - 1] = '\0';
 
     statement->type = STATEMENT_DROP_TABLE;
     statement->drop_table_stmt = drop_table_statement;

@@ -92,6 +92,7 @@ void free_table(Table* table) {
         free_tree(table->tree);
         table->tree = NULL;
     }
+    free(table->name);
     free(table);
 }
 

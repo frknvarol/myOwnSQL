@@ -59,5 +59,6 @@ int main(void) {
                 printf("Error.\n");
                 break;
             }
+        free_statement(&statement);
     }
 }
