@@ -67,9 +67,25 @@ Token next_token(Lexer *lexer) {
     if (chr == ',') { advance(lexer); return make_token(TOKEN_COMMA, ","); }
     if (chr == ';') { advance(lexer); return make_token(TOKEN_SEMICOLON, ";"); }
     if (chr == '*') { advance(lexer); return make_token(TOKEN_STAR, "*"); }
+    if (chr == '>') { advance(lexer);
+        if (peek(lexer) == '=') {
+            advance(lexer);
+            return make_token(TOKEN_GREATER_EQUAL, ">=");
+        } return make_token(TOKEN_GREATER, ">");
+    }
+    if (chr == '<') { advance(lexer);
+        if (peek(lexer) == '=') {
+            advance(lexer);
+            return make_token(TOKEN_LESSER_EQUAL, "<=");
+        } return make_token(TOKEN_LESS, "<");
+    }
+    if (chr == '!') { advance(lexer);
+        if (peek(lexer) == '=') {
+            advance(lexer);
+            return make_token(TOKEN_NOT_EQUAL, "!=");
+        } return make_token(TOKEN_UNKNOWN, (char[]){chr, '\0'});
+    }
     if (chr == '=') { advance(lexer); return make_token(TOKEN_EQUAL, "="); }
-    if (chr == '>') { advance(lexer); return make_token(TOKEN_GREATER, ">"); }
-    if (chr == '<') { advance(lexer); return make_token(TOKEN_LESS, "<"); }
     if (chr == '(') { advance(lexer); return make_token(TOKEN_OPEN_PAREN, "("); }
     if (chr == ')') { advance(lexer); return make_token(TOKEN_CLOSE_PAREN, ")"); }
 

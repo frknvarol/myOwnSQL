@@ -4,6 +4,11 @@
 #include "database.h"
 #include "table.h"
 
+/*
+ * TODO: Apply both types of the INSERT INTO statements
+ *  INSERT INTO table_name (column1, column2, column3, ...) VALUES (value1, value2, value3, ...);
+ *  INSERT INTO table_name VALUES (value1, value2, value3, ...);
+ */
 PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     InsertStatement insert_statement;
     token = next_token(lexer);
@@ -108,10 +113,30 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
             select_statement.conditions[select_statement.condition_count].column_name = strdup(token.text);
 
             token = next_token(lexer);
-            if (token.type != TOKEN_EQUAL) {
-                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
+            switch (token.type) {
+                case TOKEN_EQUAL:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_EQUAL;
+                    break;
+                case TOKEN_GREATER:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_GREATER;
+                    break;
+                case TOKEN_LESS:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_LESS;
+                    break;
+                case TOKEN_GREATER_EQUAL:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_GREATER_EQUAL;
+                    break;
+                case TOKEN_LESSER_EQUAL:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_LESSER_EQUAL;
+                    break;
+                case TOKEN_NOT_EQUAL:
+                    select_statement.conditions[select_statement.condition_count].type = TOKEN_NOT_EQUAL;
+                    break;
+                default:
+                    free_conditions(select_statement.condition_count + 1, select_statement.conditions);
+                    return PREPARE_SYNTAX_ERROR;
             }
+
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) {
@@ -379,10 +404,31 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
             delete_statement.conditions[delete_statement.condition_count].column_name = strdup(token.text);
 
             token = next_token(lexer);
-            if (token.type != TOKEN_EQUAL) {
-                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
+
+            switch (token.type) {
+                case TOKEN_EQUAL:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_EQUAL;
+                    break;
+                case TOKEN_GREATER:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_GREATER;
+                    break;
+                case TOKEN_LESS:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_LESS;
+                    break;
+                case TOKEN_GREATER_EQUAL:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_GREATER_EQUAL;
+                    break;
+                case TOKEN_LESSER_EQUAL:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_LESSER_EQUAL;
+                    break;
+                case TOKEN_NOT_EQUAL:
+                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_NOT_EQUAL;
+                    break;
+                default:
+                    free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
+                    return PREPARE_SYNTAX_ERROR;
             }
+
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING){

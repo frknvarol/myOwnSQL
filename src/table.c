@@ -26,7 +26,7 @@ Row* create_row(const TableSchema* schema) {
     return row;
 }
 
-size_t get_column_offset(const TableSchema* schema, int col_index) {
+size_t get_column_offset(const TableSchema* schema, const int col_index) {
     size_t offset = 1;
     for (int i = 0; i < col_index; i++) {
         switch (schema->columns[i].type) {
@@ -62,7 +62,7 @@ void set_text_value(const TableSchema* schema, const Row* row, const int col_ind
 }
 
 int extract_primary_key(const TableSchema* schema, const Row* row, int pk_index) {
-    size_t offset = get_column_offset(schema, pk_index);
+    const size_t offset = get_column_offset(schema, pk_index);
 
     int key; //assumes primary key is an int might go into making strings primary as well
     memcpy(&key, row->data + offset, sizeof(int));
@@ -98,10 +98,10 @@ void free_table(Table* table) {
 
 // Table row allocator function
 void* row_slot(Table* table, uint32_t row_num) {
-    size_t row_size = compute_row_size(&table->schema) + 1;
-    size_t rows_per_page = PAGE_SIZE / row_size;
+    const size_t row_size = compute_row_size(&table->schema) + 1;
+    const size_t rows_per_page = PAGE_SIZE / row_size;
 
-    size_t page_num = row_num / rows_per_page;
+    const size_t page_num = row_num / rows_per_page;
     if (table->pages[page_num] == NULL) {
         table->pages[page_num] = malloc(PAGE_SIZE);
         if (!table->pages[page_num]) {
@@ -112,8 +112,8 @@ void* row_slot(Table* table, uint32_t row_num) {
     void* page = table->pages[page_num];
 
 
-    size_t row_offset = row_num % rows_per_page;
-    size_t byte_offset = row_offset * row_size;
+    const size_t row_offset = row_num % rows_per_page;
+    const size_t byte_offset = row_offset * row_size;
     return (char*)page + byte_offset;
 }
 
@@ -142,7 +142,7 @@ void deserialize_row(const TableSchema* schema, void* source, const Row* destina
     size_t row_offset = 0;   // start of Row->data
 
     for (int i = 0; i < schema->num_columns; i++) {
-        size_t col_size = (schema->columns[i].type == COLUMN_INT)
+        size_t col_size = schema->columns[i].type == COLUMN_INT
                               ? sizeof(int32_t)
                               : schema->columns[i].size;
 

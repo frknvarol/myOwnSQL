@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "input_buffer.h"
 #include "table.h"
+#include "lexer.h"
 
 
 typedef enum {
@@ -17,11 +18,11 @@ typedef enum {
     STATEMENT_DELETE
 }StatementType;
 
-
 typedef struct {
     char* column_name;
     uint32_t column_index;
     char* value;
+    TokenType type;
 } Condition;
 
 typedef struct {
