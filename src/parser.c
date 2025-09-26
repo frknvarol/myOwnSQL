@@ -140,7 +140,10 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     if (col_token.type != TOKEN_STAR) {
         uint32_t col_index = 0;
         while (col_token.type != TOKEN_FROM) {
-            if (col_token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+            if (col_token.type != TOKEN_IDENTIFIER) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
             for (uint32_t i = 0; i < schema.num_columns; i++ ) {
                 if (strcmp(schema.columns[i].name, col_token.text) == 0) {
                     select_statement.selected_col_indexes[col_index] = i;
@@ -158,7 +161,10 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
             col_token = next_token(&selected_col_lexer);
 
             if (col_token.type == TOKEN_FROM) break;
-            if (col_token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
+            if (col_token.type != TOKEN_COMMA) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
 
             col_token = next_token(&selected_col_lexer);
         }
