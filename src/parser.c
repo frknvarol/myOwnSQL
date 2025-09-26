@@ -74,6 +74,7 @@ PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     return PREPARE_SUCCESS;
 }
 
+// TODO: There is too much nesting must be refactored
 PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
     SelectStatement select_statement;
@@ -168,16 +169,35 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
                 free_conditions(select_statement.condition_count, select_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
-            for (uint32_t i = 0; i < schema.num_columns; i++ ) {
-                if (strcmp(schema.columns[i].name, col_token.text) == 0) {
-                    select_statement.selected_col_indexes[col_index] = i;
+            /*
+            const int32_t column_index = get_column_index(&schema, col_token.text);
+            if (column_index == -1) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+            select_statement.selected_col_indexes[col_index] = column_index;
+            col_index++;
+
+            TODO: Try to change the code piece below to this in order to reduce nested loops
+            if (select_statement.has_condition) {
+                for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
+                    if (strcmp(col_token.text, select_statement.conditions[condition_index].column_name) == 0) {
+                        select_statement.conditions[condition_index].column_index = column_index;
+                    }
+                }
+            }
+            */
+
+            for (uint32_t column_index = 0; column_index < schema.num_columns; column_index++ ) {
+                if (strcmp(schema.columns[column_index].name, col_token.text) == 0) {
+                    select_statement.selected_col_indexes[col_index] = column_index;
                     col_index++;
                 }
 
                 if (select_statement.has_condition) {
-                    for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
-                        if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
-                            select_statement.conditions[j].column_index = i;
+                    for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
+                        if (strcmp(schema.columns[column_index].name, select_statement.conditions[condition_index].column_name) == 0) {
+                            select_statement.conditions[condition_index].column_index = column_index;
                         }
                     }
                 }
@@ -194,20 +214,25 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
         }
 
         select_statement.selected_col_count = col_index;
-    }
-    else {
-        select_statement.selected_col_count = 0;
-        for (uint32_t i = 0; i < schema.num_columns; i++ ) {
+        statement->type = STATEMENT_SELECT;
+        statement->select_stmt = select_statement;
 
-            if (select_statement.has_condition) {
-                for (uint32_t j = 0; j < select_statement.condition_count; j++ ) {
-                    if (strcmp(schema.columns[i].name, select_statement.conditions[j].column_name) == 0) {
-                        select_statement.conditions[j].column_index = i;
-                    }
-                }
+        return PREPARE_SUCCESS;
+    }
+
+    select_statement.selected_col_count = 0;
+    if (select_statement.has_condition) {
+
+        for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
+            const int32_t column_index = get_column_index(&schema, select_statement.conditions[condition_index].column_name);
+            if (column_index == -1) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+            if (strcmp(schema.columns[column_index].name, select_statement.conditions[condition_index].column_name) == 0) {
+                select_statement.conditions[condition_index].column_index = column_index;
             }
         }
-
     }
 
 
@@ -215,9 +240,9 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     statement->select_stmt = select_statement;
 
     return PREPARE_SUCCESS;
-    }
+}
 
-
+// TODO Refactor this function to reduce its Cognitive Complexity from 65 to the 25 allowed
 PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer* input_buffer, Token token) {
 
     token = next_token(lexer);
