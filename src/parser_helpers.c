@@ -1,4 +1,4 @@
-#include "parser_util.h"
+#include "parser_helpers.h"
 
 #include <string.h>
 #include <_string.h>
@@ -35,28 +35,25 @@ ParseResult parse_condition(Lexer* lexer, Condition* condition) {
 
     return PARSE_SUCCESS;
 }
-
-ParseResult parse_where_conditions(Lexer* lexer, SelectStatement* select_statement) {
-    select_statement->condition_count = 0;
-    select_statement->has_condition = 1;
+ParseResult parse_where_conditions(Lexer* lexer, uint32_t* condition_count, Condition* conditions){
 
     while (1) {
-        Condition* cond = &select_statement->conditions[select_statement->condition_count];
-        cond->column_name = NULL;
-        cond->value = NULL;
+        Condition* condition = &conditions[*condition_count];
+        condition->column_name = NULL;
+        condition->value = NULL;
 
-        if (parse_condition(lexer, cond) != PARSE_SUCCESS) {
-            free_conditions(select_statement->condition_count + 1, select_statement->conditions);
+        if (parse_condition(lexer, condition) != PARSE_SUCCESS) {
+            free_conditions(*condition_count + 1, conditions);
             return PARSE_SYNTAX_ERROR;
         }
 
-        select_statement->condition_count++;
+        (*condition_count)++;
 
         const Token token = next_token(lexer);
         if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EOF) break;
         if (token.type == TOKEN_AND) continue;
 
-        free_conditions(select_statement->condition_count, select_statement->conditions);
+        free_conditions(*condition_count, conditions);
         return PARSE_SYNTAX_ERROR;
     }
 

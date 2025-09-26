@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "database.h"
 #include "table.h"
-#include "parser_util.h"
+#include "parser_helpers.h"
 
 /*
  * TODO: Apply both types of the INSERT INTO statements
@@ -95,11 +95,11 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     }
     const TableSchema schema = table->schema;
 
-
     token = next_token(lexer);
     if (token.type == TOKEN_WHERE) {
-        if (parse_where_conditions(lexer, &select_statement) != PARSE_SUCCESS)
+        if (parse_where_conditions(lexer, &select_statement.condition_count, select_statement.conditions) != PARSE_SUCCESS)
             return PREPARE_SYNTAX_ERROR;
+        select_statement.has_condition = 1;
     }
 
 
