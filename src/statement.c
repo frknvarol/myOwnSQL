@@ -161,29 +161,27 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                 else if (schema->columns[index].type == COLUMN_VARCHAR) {
                     char buf[257];
                     memcpy(buf, row.data + get_column_offset(schema, index), 256);
+                    const int result = strcmp(buf, select_statement->conditions[condition_index].value) != 0;
 
-                    /* TODO: implement string comparisons with strcmp (be wary that if equal it returns 0 so probably with an if statement)
                     switch (select_statement->conditions[condition_index].type) {
                         case TOKEN_EQUAL:
-                            has_conditions = (num == val);
+                            has_conditions = (result == 0);
                             break;
                         case TOKEN_GREATER_EQUAL:
-                            has_conditions = (val >= num);
+                            has_conditions = (result >= 0);
                             break;
                         case TOKEN_GREATER:
-                            has_conditions = (val > num);
+                            has_conditions = (result > 0);
                             break;
-                        case TOKEN_LESS_EQUAL:
-                            has_conditions = (val <= num);
+                        case TOKEN_LESSER_EQUAL:
+                            has_conditions = (result <= 0);
                             break;
                         case TOKEN_LESS:
-                            has_conditions = (val < num);
+                            has_conditions = (result < 0);
                             break;
                         default:
                             return EXECUTE_FAIL;
                     }
-                    */
-                    if (strcmp(buf, select_statement->conditions[condition_index].value) != 0) {has_conditions = 0; continue;}
 
                 }
             }
@@ -315,49 +313,43 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
                         default:
                             return EXECUTE_FAIL;
                     }
-                } else if (schema->columns[col_index].type == COLUMN_VARCHAR) {
+                }
+                else if (schema->columns[col_index].type == COLUMN_VARCHAR) {
                     char buf[257] = {0};
                     memcpy(buf, (char*)row_ptr + 1 + get_column_offset(schema, col_index), schema->columns[col_index].size);
-                    if (strcmp(buf, delete_statement->conditions[condition_index ].value) != 0) {
-                        has_conditions = 0;
-                    }
+                    const int result = strcmp(buf, delete_statement->conditions[condition_index].value) != 0;
 
-                    /* TODO: implement string comparisons with strcmp (be wary that if equal it returns 0 so probably with an if statement)
                     switch (delete_statement->conditions[condition_index].type) {
                         case TOKEN_EQUAL:
-                            has_conditions = (num == val);
+                            has_conditions = (result == 0);
                             break;
                         case TOKEN_GREATER_EQUAL:
-                            has_conditions = (val >= num);
+                            has_conditions = (result >= 0);
                             break;
                         case TOKEN_GREATER:
-                            has_conditions = (val > num);
+                            has_conditions = (result > 0);
                             break;
-                        case TOKEN_LESS_EQUAL:
-                            has_conditions = (val <= num);
+                        case TOKEN_LESSER_EQUAL:
+                            has_conditions = (result <= 0);
                             break;
                         case TOKEN_LESS:
-                            has_conditions = (val < num);
+                            has_conditions = (result < 0);
                             break;
                         default:
                             return EXECUTE_FAIL;
                     }
-                    */
+
                 }
 
                 if (!has_conditions) break;
 
             }
 
-            if (has_conditions) {
-                *(uint8_t*)row_ptr = 1;
-            }
+            if (has_conditions) *(uint8_t*)row_ptr = 1;
 
 
+        } else *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
 
-        } else {
-            *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
-        }
     }
 
     return EXECUTE_SUCCESS;
