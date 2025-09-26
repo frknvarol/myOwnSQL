@@ -92,14 +92,15 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
     TableSchema* schema = &table->schema;
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
+    if (!row.data) return EXECUTE_FAIL;
 
 
     if (select_statement->selected_col_count == 0) {
         printf("COLUMNS:\n");
         printf("(");
-        for (int i = 0; i < schema->num_columns; i++) {
-            if (i > 0) printf(", ");
-            printf("%s", schema->columns[i].name);
+        for (int column_index = 0; column_index < schema->num_columns; column_index++) {
+            if (column_index > 0) printf(", ");
+            printf("%s", schema->columns[column_index].name);
         }
         printf(")\n\n");
     } else {
@@ -107,7 +108,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         printf("(");
         for (uint32_t i = 0; i < select_statement->selected_col_count; i++) {
             if (i > 0) printf(", ");
-            uint32_t index = select_statement->selected_col_indexes[i];
+            const uint32_t index = select_statement->selected_col_indexes[i];
             printf("%s", schema->columns[index].name);
         }
         printf(")\n\n");
@@ -133,8 +134,6 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                     const long int num = strtol(value, &endptr, 10);
                     if (endptr == value || *endptr != '\0' || num != val) has_conditions = 0;
 
-
-
                 }
                 else if (schema->columns[index].type == COLUMN_VARCHAR) {
                     char buf[257];
@@ -142,31 +141,23 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
                     if (strcmp(buf, select_statement->conditions[condition_index].value) != 0) has_conditions = 0;
 
                 }
-
             }
 
-            if (has_conditions) {
-                print_row(&table->schema, &row, select_statement);
-            }
-
-
+            if (has_conditions) print_row(&table->schema, &row, select_statement);
         }
         free(row.data);
-
         return EXECUTE_SUCCESS;
-
-
     }
 
-    for (uint32_t i = 0; i < table->num_rows; i++) {
-        void* row_ptr = row_slot(table, i);
+    for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
+        void* row_ptr = row_slot(table, row_index);
         if (*(uint8_t*)row_ptr) continue;
-        deserialize_row(&table->schema, row_slot(table, i), &row);
+        deserialize_row(&table->schema, row_slot(table, row_index), &row);
         print_row(&table->schema, &row, select_statement);
     }
+
     free(row.data);
     return EXECUTE_SUCCESS;
-
 }
 
 ExecuteResult execute_create_table(const CreateTableStatement* create_statement) {

@@ -411,8 +411,12 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
 
     if (delete_statement.has_condition) {
         for (int32_t j = 0; j < delete_statement.condition_count; j++) {
-            int32_t col_index = get_column_index(&schema, delete_statement.conditions[j].column_name);
-            if (col_index < 0) return PREPARE_SYNTAX_ERROR;
+            const int32_t col_index = get_column_index(&schema, delete_statement.conditions[j].column_name);
+            if (col_index < 0) {
+                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+
             delete_statement.conditions[j].column_index = col_index;
         }
     }
