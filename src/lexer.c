@@ -75,7 +75,7 @@ Token next_token(Lexer *lexer) {
 
 
     if (chr == '\'' || chr == '"') {
-        char quote = advance(lexer);
+        const char quote = advance(lexer);
         char buffer[256]; size_t i = 0;
         while (peek(lexer) != quote && peek(lexer) != '\0' && i < sizeof(buffer)-1)
             buffer[i++] = advance(lexer);

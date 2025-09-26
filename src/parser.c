@@ -84,7 +84,7 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     token = next_token(lexer);
     strncpy(select_statement.table_name, token.text, sizeof(select_statement.table_name));
 
-    Table* table = find_table(&global_db, token.text);
+    const Table* table = find_table(&global_db, token.text);
     if (table == NULL) {
         return PREPARE_TABLE_NOT_FOUND_ERROR;
     }
@@ -102,20 +102,20 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
             token = next_token(lexer);
             if (token.type != TOKEN_IDENTIFIER) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
+                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
             select_statement.conditions[select_statement.condition_count].column_name = strdup(token.text);
 
             token = next_token(lexer);
             if (token.type != TOKEN_EQUAL) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
+                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
+                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
             select_statement.conditions[select_statement.condition_count].value = strdup(token.text);
@@ -123,8 +123,7 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
             select_statement.condition_count++;
 
             token = next_token(lexer);
-            if (token.type == TOKEN_SEMICOLON) break;
-            if (token.type == TOKEN_EOF) break;
+            if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EOF) break;
             if (token.type == TOKEN_AND) continue;
 
             free_conditions(select_statement.condition_count, select_statement.conditions);
@@ -216,7 +215,7 @@ PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer
             return PREPARE_SYNTAX_ERROR;
         }
 
-        char* close_paren = find_close_parenthesis(open_paren);
+        const char* close_paren = find_close_parenthesis(open_paren);
         if (!close_paren) return PREPARE_SYNTAX_ERROR;
 
 
@@ -373,7 +372,7 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
 
             token = next_token(lexer);
             if (token.type != TOKEN_IDENTIFIER) {
-                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
 
@@ -381,13 +380,13 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
 
             token = next_token(lexer);
             if (token.type != TOKEN_EQUAL) {
-                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
 
             token = next_token(lexer);
             if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING){
-                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
             delete_statement.conditions[delete_statement.condition_count].value = strdup(token.text);
@@ -396,8 +395,7 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
             delete_statement.condition_count++;
 
             token = next_token(lexer);
-            if (token.type == TOKEN_SEMICOLON) break;
-            if (token.type == TOKEN_EOF) break;
+            if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EOF) break;
             if (token.type == TOKEN_AND) continue;
 
             free_conditions(delete_statement.condition_count, delete_statement.conditions);

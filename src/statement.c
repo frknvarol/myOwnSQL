@@ -235,7 +235,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
             int has_conditions = 1;
 
             for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index ++) {
-                uint32_t col_index = delete_statement->conditions[condition_index].column_index;
+                const uint32_t col_index = delete_statement->conditions[condition_index].column_index;
 
                 if (schema->columns[col_index].type == COLUMN_INT) {
                     int32_t val;
@@ -245,16 +245,16 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
                     const long target = strtol(delete_statement->conditions[condition_index ].value, &endptr, 10);
                     if (endptr == delete_statement->conditions[condition_index ].value || *endptr != '\0' || val != (int32_t)target) {
                         has_conditions = 0;
-                        break;
                     }
                 } else if (schema->columns[col_index].type == COLUMN_VARCHAR) {
                     char buf[257] = {0};
                     memcpy(buf, (char*)row_ptr + 1 + get_column_offset(schema, col_index), schema->columns[col_index].size);
                     if (strcmp(buf, delete_statement->conditions[condition_index ].value) != 0) {
                         has_conditions = 0;
-                        break;
                     }
                 }
+
+                if (!has_conditions) break;
 
             }
 

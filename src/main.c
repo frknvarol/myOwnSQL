@@ -53,10 +53,10 @@ int main(void) {
 
 
         switch (execute_statement(&statement)) {
-            case (EXECUTE_SUCCESS):
+            case EXECUTE_SUCCESS:
                 printf("Executed.\n");
                 break;
-            case (EXECUTE_FAIL):
+            case EXECUTE_FAIL:
                 printf("Error.\n");
                 break;
             }
