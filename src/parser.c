@@ -93,33 +93,48 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
     token = next_token(lexer);
     select_statement.condition_count = 0;
+    select_statement.has_condition = 0;
     if (token.type == TOKEN_WHERE) {
-        uint32_t index = 0;
         while (1) {
 
-            token = next_token(lexer);
-            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            select_statement.conditions[index].column_name = strdup(token.text);
+            select_statement.conditions[select_statement.condition_count].column_name = NULL;
+            select_statement.conditions[select_statement.condition_count].value = NULL;
 
             token = next_token(lexer);
-            if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
+            if (token.type != TOKEN_IDENTIFIER) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+            select_statement.conditions[select_statement.condition_count].column_name = strdup(token.text);
 
             token = next_token(lexer);
-            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-            select_statement.conditions[index].value = strdup(token.text);
+            if (token.type != TOKEN_EQUAL) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
 
-            index++;
+            token = next_token(lexer);
+            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) {
+                free_conditions(select_statement.condition_count, select_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+            select_statement.conditions[select_statement.condition_count].value = strdup(token.text);
+
             select_statement.condition_count++;
 
             token = next_token(lexer);
             if (token.type == TOKEN_SEMICOLON) break;
             if (token.type == TOKEN_EOF) break;
-            if (token.type != TOKEN_AND) break;
+            if (token.type == TOKEN_AND) continue;
+
+            free_conditions(select_statement.condition_count, select_statement.conditions);
+            return PREPARE_SYNTAX_ERROR;
+
 
         }
         select_statement.has_condition = 1;
     }
-    else select_statement.has_condition = 0;
+
 
     Token col_token = next_token(&selected_col_lexer);
     if (col_token.type != TOKEN_STAR) {
@@ -328,7 +343,7 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
     token = next_token(lexer);
     if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
 
-    Table* table = find_table(&global_db, token.text);
+    const Table* table = find_table(&global_db, token.text);
     if (table == NULL) {
         return PREPARE_TABLE_NOT_FOUND_ERROR;
     }
@@ -345,28 +360,42 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
     }
 
     if (token.type == TOKEN_WHERE) {
-        uint32_t index = 0;
         while (1) {
 
-            token = next_token(lexer);
-            if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-            delete_statement.conditions[index].column_name = strdup(token.text);
+            delete_statement.conditions[delete_statement.condition_count].column_name = NULL;
+            delete_statement.conditions[delete_statement.condition_count].value = NULL;
 
             token = next_token(lexer);
-            if (token.type != TOKEN_EQUAL) return PREPARE_SYNTAX_ERROR;
+            if (token.type != TOKEN_IDENTIFIER) {
+                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+
+            delete_statement.conditions[delete_statement.condition_count].column_name = strdup(token.text);
 
             token = next_token(lexer);
-            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) return PREPARE_SYNTAX_ERROR;
-            delete_statement.conditions[index].value = strdup(token.text);
+            if (token.type != TOKEN_EQUAL) {
+                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+
+            token = next_token(lexer);
+            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING){
+                free_conditions(delete_statement.condition_count, delete_statement.conditions);
+                return PREPARE_SYNTAX_ERROR;
+            }
+            delete_statement.conditions[delete_statement.condition_count].value = strdup(token.text);
 
 
-            index++;
             delete_statement.condition_count++;
 
             token = next_token(lexer);
             if (token.type == TOKEN_SEMICOLON) break;
             if (token.type == TOKEN_EOF) break;
-            if (token.type != TOKEN_AND) break;
+            if (token.type == TOKEN_AND) continue;
+
+            free_conditions(delete_statement.condition_count, delete_statement.conditions);
+            return PREPARE_SYNTAX_ERROR;
 
         }
         delete_statement.has_condition = 1;

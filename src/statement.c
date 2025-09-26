@@ -348,17 +348,18 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
 void free_statement(const Statement* statement) {
     switch (statement->type) {
         case STATEMENT_SELECT:
-            for (uint32_t condition_index = 0; condition_index < statement->select_stmt.condition_count; condition_index++) {
-                free(statement->select_stmt.conditions[condition_index].value);
-                free(statement->select_stmt.conditions[condition_index].column_name);
-            }
+            free_conditions(statement->select_stmt.condition_count, statement->select_stmt.conditions);
             break;
         case STATEMENT_DELETE:
-            for (uint32_t condition_index = 0; condition_index < statement->delete_stmt.condition_count; condition_index++) {
-                free(statement->delete_stmt.conditions[condition_index].value);
-                free(statement->delete_stmt.conditions[condition_index].column_name);
-            }
+            free_conditions(statement->delete_stmt.condition_count, statement->delete_stmt.conditions);
             break;
         default:;
+    }
+}
+
+void free_conditions(const uint32_t condition_count, const Condition* conditions) {
+    for (uint32_t condition_index = 0; condition_index < condition_count; condition_index++) {
+        free(conditions[condition_index].value);
+        free(conditions[condition_index].column_name);
     }
 }

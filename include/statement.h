@@ -105,6 +105,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement);
 void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
 char* find_close_parenthesis(char* open_parenthesis);
 void free_statement(const Statement* statement);
+void free_conditions(uint32_t condition_count, const Condition* conditions);
 
 
 
