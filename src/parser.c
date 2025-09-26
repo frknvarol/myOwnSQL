@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "database.h"
 #include "table.h"
+#include "parser_util.h"
 
 /*
  * TODO: Apply both types of the INSERT INTO statements
@@ -77,20 +78,18 @@ PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
 // TODO: There is too much nesting must be refactored
 PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
-    SelectStatement select_statement;
-    select_statement.selected_col_count = 0;
+    SelectStatement select_statement = {0};
 
     Lexer selected_col_lexer = *lexer;
     token = next_token(lexer);
 
-    while (token.type != TOKEN_FROM) {
-        token = next_token(lexer);
-    }
+    while (token.type != TOKEN_FROM) token = next_token(lexer);
 
-    token = next_token(lexer);
-    strncpy(select_statement.table_name, token.text, sizeof(select_statement.table_name));
 
-    const Table* table = find_table(&global_db, token.text);
+    if (parse_select_table(lexer, &select_statement) != PARSE_SUCCESS)
+        return PREPARE_SYNTAX_ERROR;
+
+    const Table* table = find_table(&global_db, select_statement.table_name);
     if (table == NULL) {
         return PREPARE_TABLE_NOT_FOUND_ERROR;
     }
@@ -98,147 +97,30 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
 
     token = next_token(lexer);
-    select_statement.condition_count = 0;
-    select_statement.has_condition = 0;
     if (token.type == TOKEN_WHERE) {
-        while (1) {
-
-            select_statement.conditions[select_statement.condition_count].column_name = NULL;
-            select_statement.conditions[select_statement.condition_count].value = NULL;
-
-            token = next_token(lexer);
-            if (token.type != TOKEN_IDENTIFIER) {
-                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-            select_statement.conditions[select_statement.condition_count].column_name = strdup(token.text);
-
-            token = next_token(lexer);
-            switch (token.type) {
-                case TOKEN_EQUAL:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_EQUAL;
-                    break;
-                case TOKEN_GREATER:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_GREATER;
-                    break;
-                case TOKEN_LESS:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_LESS;
-                    break;
-                case TOKEN_GREATER_EQUAL:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_GREATER_EQUAL;
-                    break;
-                case TOKEN_LESSER_EQUAL:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_LESSER_EQUAL;
-                    break;
-                case TOKEN_NOT_EQUAL:
-                    select_statement.conditions[select_statement.condition_count].type = TOKEN_NOT_EQUAL;
-                    break;
-                default:
-                    free_conditions(select_statement.condition_count + 1, select_statement.conditions);
-                    return PREPARE_SYNTAX_ERROR;
-            }
-
-
-            token = next_token(lexer);
-            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING) {
-                free_conditions(select_statement.condition_count + 1, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-            select_statement.conditions[select_statement.condition_count].value = strdup(token.text);
-
-            select_statement.condition_count++;
-
-            token = next_token(lexer);
-            if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EOF) break;
-            if (token.type == TOKEN_AND) continue;
-
-            free_conditions(select_statement.condition_count, select_statement.conditions);
+        if (parse_where_conditions(lexer, &select_statement) != PARSE_SUCCESS)
             return PREPARE_SYNTAX_ERROR;
-
-
-        }
-        select_statement.has_condition = 1;
     }
 
 
-    Token col_token = next_token(&selected_col_lexer);
-    if (col_token.type != TOKEN_STAR) {
-        uint32_t col_index = 0;
-        while (col_token.type != TOKEN_FROM) {
-            if (col_token.type != TOKEN_IDENTIFIER) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-            /*
-            const int32_t column_index = get_column_index(&schema, col_token.text);
-            if (column_index == -1) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-            select_statement.selected_col_indexes[col_index] = column_index;
-            col_index++;
-
-            TODO: Try to change the code piece below to this in order to reduce nested loops
-            if (select_statement.has_condition) {
-                for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
-                    if (strcmp(col_token.text, select_statement.conditions[condition_index].column_name) == 0) {
-                        select_statement.conditions[condition_index].column_index = column_index;
-                    }
-                }
-            }
-            */
-
-            for (uint32_t column_index = 0; column_index < schema.num_columns; column_index++ ) {
-                if (strcmp(schema.columns[column_index].name, col_token.text) == 0) {
-                    select_statement.selected_col_indexes[col_index] = column_index;
-                    col_index++;
-                }
-
-                if (select_statement.has_condition) {
-                    for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
-                        if (strcmp(schema.columns[column_index].name, select_statement.conditions[condition_index].column_name) == 0) {
-                            select_statement.conditions[condition_index].column_index = column_index;
-                        }
-                    }
-                }
-            }
-            col_token = next_token(&selected_col_lexer);
-
-            if (col_token.type == TOKEN_FROM) break;
-            if (col_token.type != TOKEN_COMMA) {
-                free_conditions(select_statement.condition_count, select_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-
-            col_token = next_token(&selected_col_lexer);
-        }
-
-        select_statement.selected_col_count = col_index;
-        statement->type = STATEMENT_SELECT;
-        statement->select_stmt = select_statement;
-
-        return PREPARE_SUCCESS;
+    if (parse_selected_columns(&selected_col_lexer, &schema, &select_statement) != PARSE_SUCCESS) {
+        free_conditions(select_statement.condition_count, select_statement.conditions);
+        return PREPARE_SYNTAX_ERROR;
     }
 
-    select_statement.selected_col_count = 0;
     if (select_statement.has_condition) {
-
-        for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++ ) {
-            const int32_t column_index = get_column_index(&schema, select_statement.conditions[condition_index].column_name);
-            if (column_index == -1) {
+        for (uint32_t condition_index = 0; condition_index < select_statement.condition_count; condition_index++) {
+            const int col_index = get_column_index(&schema, select_statement.conditions[condition_index].column_name);
+            if (col_index < 0) {
                 free_conditions(select_statement.condition_count, select_statement.conditions);
                 return PREPARE_SYNTAX_ERROR;
             }
-            if (strcmp(schema.columns[column_index].name, select_statement.conditions[condition_index].column_name) == 0) {
-                select_statement.conditions[condition_index].column_index = column_index;
-            }
+            select_statement.conditions[condition_index].column_index = col_index;
         }
     }
-
 
     statement->type = STATEMENT_SELECT;
     statement->select_stmt = select_statement;
-
     return PREPARE_SUCCESS;
 }
 
