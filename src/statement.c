@@ -268,6 +268,10 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
     Table* table = find_table(&global_db, delete_statement->table_name);
     const TableSchema* schema = &table->schema;
 
+    if (table == NULL) {
+        return EXECUTE_FAIL;
+    }
+
     for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
         void* row_ptr = row_slot(table, row_index);
 

@@ -3,12 +3,13 @@
 #include <string.h>
 #include <_string.h>
 
-ParseResult parse_select_table(Lexer* lexer, SelectStatement* select_statement) {
+ParseResult parse_table_name(Lexer* lexer, char* table_name, size_t size) {
     const Token token = next_token(lexer);
     if (token.type != TOKEN_IDENTIFIER) return PARSE_SYNTAX_ERROR;
 
-    strncpy(select_statement->table_name, token.text, sizeof(select_statement->table_name));
-    select_statement->table_name[sizeof(select_statement->table_name)-1] = '\0';
+    strncpy(table_name, token.text, size);
+    table_name[size - 1] = '\0';  // ensure null termination
+
     return PARSE_SUCCESS;
 }
 

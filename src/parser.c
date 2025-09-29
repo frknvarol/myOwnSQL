@@ -1,4 +1,6 @@
 #include "parser.h"
+
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "database.h"
@@ -75,7 +77,6 @@ PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     return PREPARE_SUCCESS;
 }
 
-// TODO: There is too much nesting must be refactored
 PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
 
     SelectStatement select_statement = {0};
@@ -86,7 +87,7 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     while (token.type != TOKEN_FROM) token = next_token(lexer);
 
 
-    if (parse_select_table(lexer, &select_statement) != PARSE_SUCCESS)
+    if (parse_table_name(lexer, select_statement.table_name, sizeof(select_statement.table_name)) != PARSE_SUCCESS)
         return PREPARE_SYNTAX_ERROR;
 
     const Table* table = find_table(&global_db, select_statement.table_name);
@@ -277,17 +278,15 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
     token = next_token(lexer);
     if (token.type != TOKEN_FROM) return PREPARE_SYNTAX_ERROR;
 
-    token = next_token(lexer);
-    if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
+    if (parse_table_name(lexer, delete_statement.table_name, sizeof(delete_statement.table_name)) != PARSE_SUCCESS)
+        return PREPARE_SYNTAX_ERROR;
 
-    const Table* table = find_table(&global_db, token.text);
+    const Table* table = find_table(&global_db, delete_statement.table_name);
     if (table == NULL) {
         return PREPARE_TABLE_NOT_FOUND_ERROR;
     }
     const TableSchema schema = table->schema;
 
-    strncpy(delete_statement.table_name, token.text, sizeof(delete_statement.table_name) - 1);
-    delete_statement.table_name[sizeof(delete_statement.table_name) - 1] = '\0';
 
     token = next_token(lexer);
     if (token.type == TOKEN_EOF || token.type == TOKEN_SEMICOLON) {
@@ -297,66 +296,11 @@ PrepareResult parse_delete(Lexer* lexer, Statement* statement, Token token) {
     }
 
     if (token.type == TOKEN_WHERE) {
-        while (1) {
-
-            delete_statement.conditions[delete_statement.condition_count].column_name = NULL;
-            delete_statement.conditions[delete_statement.condition_count].value = NULL;
-
-            token = next_token(lexer);
-            if (token.type != TOKEN_IDENTIFIER) {
-                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-
-            delete_statement.conditions[delete_statement.condition_count].column_name = strdup(token.text);
-
-            token = next_token(lexer);
-
-            switch (token.type) {
-                case TOKEN_EQUAL:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_EQUAL;
-                    break;
-                case TOKEN_GREATER:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_GREATER;
-                    break;
-                case TOKEN_LESS:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_LESS;
-                    break;
-                case TOKEN_GREATER_EQUAL:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_GREATER_EQUAL;
-                    break;
-                case TOKEN_LESSER_EQUAL:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_LESSER_EQUAL;
-                    break;
-                case TOKEN_NOT_EQUAL:
-                    delete_statement.conditions[delete_statement.condition_count].type = TOKEN_NOT_EQUAL;
-                    break;
-                default:
-                    free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
-                    return PREPARE_SYNTAX_ERROR;
-            }
-
-
-            token = next_token(lexer);
-            if (token.type != TOKEN_NUMBER && token.type != TOKEN_STRING){
-                free_conditions(delete_statement.condition_count + 1, delete_statement.conditions);
-                return PREPARE_SYNTAX_ERROR;
-            }
-            delete_statement.conditions[delete_statement.condition_count].value = strdup(token.text);
-
-
-            delete_statement.condition_count++;
-
-            token = next_token(lexer);
-            if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EOF) break;
-            if (token.type == TOKEN_AND) continue;
-
-            free_conditions(delete_statement.condition_count, delete_statement.conditions);
+        if (parse_where_conditions(lexer, &delete_statement.condition_count, delete_statement.conditions) != PARSE_SUCCESS)
             return PREPARE_SYNTAX_ERROR;
-
-        }
         delete_statement.has_condition = 1;
     }
+
 
 
 
