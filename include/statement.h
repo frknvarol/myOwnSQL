@@ -104,7 +104,7 @@ ExecuteResult execute_drop_table(const DropTableStatement* drop_table_statement)
 ExecuteResult execute_show_tables();
 ExecuteResult execute_delete(const DeleteStatement* delete_statement);
 void print_row(const TableSchema* schema, const Row* row, const SelectStatement* select_statement);
-char* find_close_parenthesis(char* open_parenthesis);
+const char* find_close_parenthesis(const char* open_parenthesis);
 void free_statement(const Statement* statement);
 void free_conditions(uint32_t condition_count, const Condition* conditions);
 

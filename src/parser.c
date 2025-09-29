@@ -134,97 +134,24 @@ PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer
         CreateTableStatement create_statement;
         create_statement.primary_col_index = -1;
 
-        token = next_token(lexer);
-        if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-        strncpy(create_statement.table_name, token.text, sizeof(create_statement.table_name));
-
-        token = next_token(lexer);
-        if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
-
-        char* open_paren = strchr(input_buffer->buffer, '(');
-        if (!open_paren) return PREPARE_SYNTAX_ERROR;
-
-        if (open_paren != strstr(input_buffer->buffer, token.text)) {
+        if (parse_create_table_name(lexer, &create_statement) != PARSE_SUCCESS)
             return PREPARE_SYNTAX_ERROR;
-        }
 
-        const char* close_paren = find_close_parenthesis(open_paren);
-        if (!close_paren) return PREPARE_SYNTAX_ERROR;
-
+        if (parse_open_paren(lexer) != PARSE_SUCCESS)
+            return PREPARE_SYNTAX_ERROR;
 
         char column_definitions[256];
-        strncpy(column_definitions, open_paren+ 1, close_paren - open_paren - 1);
-        column_definitions[close_paren - open_paren - 1] = '\0';
+        const char* open_paren;
+        const char* close_paren;
 
-        create_statement.num_columns = 0;
-        while (1) {
-            token = next_token(lexer);
+        if (extract_column_definitions(input_buffer, column_definitions, sizeof(column_definitions),
+                                       &open_paren, &close_paren) != PARSE_SUCCESS)
+            return PREPARE_SYNTAX_ERROR;
 
-            if (token.type == TOKEN_IDENTIFIER) {
-                strcpy(create_statement.columns[create_statement.num_columns].name, token.text);
-                create_statement.columns[create_statement.num_columns].index = create_statement.num_columns;
-
-                token = next_token(lexer);
-                if (token.type == TOKEN_INT) {
-                    create_statement.columns[create_statement.num_columns].type = COLUMN_INT;
-                    create_statement.num_columns++;
-                }
-
-                else if (token.type == TOKEN_VARCHAR) {
-
-                    token = next_token(lexer);
-
-                    if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
-
-                    token = next_token(lexer);
-
-                    if (token.type != TOKEN_NUMBER) return PREPARE_SYNTAX_ERROR;
-
-                    char *endptr;
-                    const long val = strtol(token.text, &endptr, 10);
-                    if (endptr == token.text || *endptr != '\0' || val > UINT32_MAX) return PREPARE_SYNTAX_ERROR;
-
-                    uint32_t size = (uint32_t)val;
-
-                    create_statement.columns[create_statement.num_columns].type = COLUMN_VARCHAR;
-                    create_statement.columns[create_statement.num_columns].size = size;
-
-                    token = next_token(lexer);
-                    if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
-                    create_statement.num_columns++;
-
-
-                }
-            }
-
-            else if (token.type == TOKEN_PRIMARY) {
-                token = next_token(lexer);
-                if (token.type != TOKEN_KEY) return PREPARE_SYNTAX_ERROR;
-
-                token = next_token(lexer);
-                if (token.type != TOKEN_OPEN_PAREN) return PREPARE_SYNTAX_ERROR;
-
-
-                token = next_token(lexer);
-                if (token.type != TOKEN_IDENTIFIER) return PREPARE_SYNTAX_ERROR;
-
-
-                create_statement.primary_col_index = create_statement.num_columns;
-
-                token = next_token(lexer);
-                if (token.type != TOKEN_CLOSE_PAREN) return PREPARE_SYNTAX_ERROR;
-
-            }
-
-
-            token = next_token(lexer);
-
-            if (token.type == TOKEN_CLOSE_PAREN) break;
-            if (token.type != TOKEN_COMMA) return PREPARE_SYNTAX_ERROR;
-        }
+        if (parse_columns(lexer, &create_statement) != PARSE_SUCCESS)
+            return PREPARE_SYNTAX_ERROR;
 
         statement->type = STATEMENT_CREATE_TABLE;
-
         statement->create_table_stmt = create_statement;
         return PREPARE_SUCCESS;
     }

@@ -367,7 +367,7 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
 
 
 
-char* find_close_parenthesis(char* open_parenthesis) {
+const char* find_close_parenthesis(const char* open_parenthesis) {
     /*Function to find the matching closing parenthesis of an open parenthesis*/
     int open_paren_count = 0;
 
