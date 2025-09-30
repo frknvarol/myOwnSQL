@@ -140,9 +140,9 @@ ParseResult parse_create_table_columns(Lexer* lexer, CreateTableStatement* creat
             if (parse_create_table_column(lexer, create_statement) != PARSE_SUCCESS) return PARSE_SYNTAX_ERROR;
         }
 
-        else if (token.type == TOKEN_PRIMARY) {
-            if (parse_primary_key(lexer, create_statement) != PARSE_SUCCESS) return PARSE_SYNTAX_ERROR;
-        }
+        else if (token.type == TOKEN_PRIMARY && parse_primary_key(lexer, create_statement) != PARSE_SUCCESS)
+            return PARSE_SYNTAX_ERROR;
+
 
         token = next_token(lexer);
 

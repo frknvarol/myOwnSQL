@@ -107,7 +107,7 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
 const char* find_close_parenthesis(const char* open_parenthesis);
 void free_statement(const Statement* statement);
 void free_conditions(uint32_t condition_count, const Condition* conditions);
-
+int filter_rows(const SelectStatement* select_statement, uint32_t row_index, Table* table, Row row);
 
 
 #endif
