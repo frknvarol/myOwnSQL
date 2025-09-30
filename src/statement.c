@@ -132,7 +132,7 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         void* row_ptr = row_slot(table, row_index);
         if (*(uint8_t*)row_ptr) continue;
 
-        const int has_conditions = filter_rows(select_statement, row_index, table, row);
+        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, row_index, table, row);
         if (has_conditions) print_row(&table->schema, &row, select_statement);
 
     }
@@ -205,11 +205,17 @@ ExecuteResult execute_show_tables() {
 // TODO Refactor this function to reduce its Cognitive Complexity from 30 to the 25 allowed.
 ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
     Table* table = find_table(&global_db, delete_statement->table_name);
-    const TableSchema* schema = &table->schema;
-
     if (table == NULL) {
         return EXECUTE_FAIL;
     }
+
+    Row row;
+    row.data = malloc(compute_row_size(&table->schema));
+    if (!row.data) {
+        free(row.data);
+        return EXECUTE_FAIL;
+    }
+
 
     for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
         void* row_ptr = row_slot(table, row_index);
@@ -221,88 +227,24 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
             *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
             continue;
         }
-        int has_conditions = 1; // first assume the current row meets the WHERE clause
 
-        for (uint32_t condition_index = 0; condition_index < delete_statement->condition_count; condition_index ++) {
-            const uint32_t col_index = delete_statement->conditions[condition_index].column_index;
-
-            if (schema->columns[col_index].type == COLUMN_INT) {
-                int32_t val;
-                memcpy(&val, (char*)row_ptr + 1 + get_column_offset(schema, col_index), sizeof(int32_t));
-
-                char* endptr;
-                const long target = strtol(delete_statement->conditions[condition_index ].value, &endptr, 10);
-                if (endptr == delete_statement->conditions[condition_index ].value || *endptr != '\0') {
-                    has_conditions = 0;
-                    continue;
-                }
-
-                switch (delete_statement->conditions[condition_index].type) {
-                    case TOKEN_EQUAL:
-                        has_conditions = (target == val);
-                        break;
-                    case TOKEN_GREATER_EQUAL:
-                        has_conditions = (val >= target);
-                        break;
-                    case TOKEN_GREATER:
-                        has_conditions = (val > target);
-                        break;
-                    case TOKEN_LESSER_EQUAL:
-                        has_conditions = (val <= target);
-                        break;
-                    case TOKEN_LESS:
-                        has_conditions = (val < target);
-                        break;
-                    case TOKEN_NOT_EQUAL:
-                        has_conditions = (val != target);
-                        break;
-                    default:
-                        return EXECUTE_FAIL;
-                }
-            }
-            else if (schema->columns[col_index].type == COLUMN_VARCHAR) {
-                char buf[257] = {0};
-                memcpy(buf, (char*)row_ptr + 1 + get_column_offset(schema, col_index), schema->columns[col_index].size);
-                const int result = strcmp(buf, delete_statement->conditions[condition_index].value) != 0;
-
-                switch (delete_statement->conditions[condition_index].type) {
-                    case TOKEN_EQUAL:
-                        has_conditions = (result == 0);
-                        break;
-                    case TOKEN_GREATER_EQUAL:
-                        has_conditions = (result >= 0);
-                        break;
-                    case TOKEN_GREATER:
-                        has_conditions = (result > 0);
-                        break;
-                    case TOKEN_LESSER_EQUAL:
-                        has_conditions = (result <= 0);
-                        break;
-                    case TOKEN_LESS:
-                        has_conditions = (result < 0);
-                        break;
-                    default:
-                        return EXECUTE_FAIL;
-                }
-
-            }
-
-            if (!has_conditions) break;
-
+        const int has_conditions = filter_rows(delete_statement->conditions, delete_statement->condition_count, row_index, table, row);
+        switch (has_conditions) {
+            case 1:
+                *(uint8_t*)row_ptr = 1;
+                break;
+            case -1:
+                free(row.data);
+                return EXECUTE_FAIL;
+            default:
+                break;
         }
-
-        if (has_conditions) *(uint8_t*)row_ptr = 1;
-
-
-
 
     }
 
+    free(row.data);
     return EXECUTE_SUCCESS;
 }
-
-
-
 
 
 
@@ -347,7 +289,7 @@ void print_row(const TableSchema* schema, const Row* row, const SelectStatement*
     } else {
         for (uint32_t i = 0; i < select_statement->selected_col_count; i++) {
             if (i > 0) printf(", ");
-            uint32_t index = select_statement->selected_col_indexes[i];
+            const uint32_t index = select_statement->selected_col_indexes[i];
             if (schema->columns[index].type == COLUMN_INT) {
                 int32_t val;
                 memcpy(&val, row->data + get_column_offset(schema, index), sizeof(int32_t));
@@ -385,25 +327,25 @@ void free_conditions(const uint32_t condition_count, const Condition* conditions
 }
 
 
-int filter_rows(const SelectStatement* select_statement, const uint32_t row_index, Table* table, const Row row) {
+int filter_rows(const Condition* conditions, const uint32_t condition_count, const uint32_t row_index, Table* table, const Row row) {
 
     deserialize_row(&table->schema, row_slot(table, row_index), &row);
     int has_conditions = 1;
     const TableSchema* schema = &table->schema;
-    for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+    for (uint32_t condition_index = 0; condition_index < condition_count; condition_index++) {
         if (!has_conditions) continue;
-        const uint32_t index = select_statement->conditions[condition_index].column_index;
+        const uint32_t index = conditions[condition_index].column_index;
         if (schema->columns[index].type == COLUMN_INT) {
             int32_t val;
             memcpy(&val, row.data + get_column_offset(schema, index), sizeof(int32_t));
 
             char *endptr;
-            const char* value = select_statement->conditions[condition_index].value;
+            const char* value = conditions[condition_index].value;
 
             const long int target = strtol(value, &endptr, 10);
             if (endptr == value || *endptr != '\0') {has_conditions = 0; continue;}
 
-            switch (select_statement->conditions[condition_index].type) {
+            switch (conditions[condition_index].type) {
                 case TOKEN_EQUAL:
                     has_conditions = (target == val);
                     break;
@@ -423,16 +365,16 @@ int filter_rows(const SelectStatement* select_statement, const uint32_t row_inde
                     has_conditions = (val != target);
                     break;
                 default:
-                    return EXECUTE_FAIL;
+                    return -1;
             }
 
         }
         else if (schema->columns[index].type == COLUMN_VARCHAR) {
             char buf[257];
             memcpy(buf, row.data + get_column_offset(schema, index), 256);
-            const int result = strcmp(buf, select_statement->conditions[condition_index].value) != 0;
+            const int result = strcmp(buf, conditions[condition_index].value) != 0;
 
-            switch (select_statement->conditions[condition_index].type) {
+            switch (conditions[condition_index].type) {
                 case TOKEN_EQUAL:
                     has_conditions = (result == 0);
                     break;
@@ -449,7 +391,7 @@ int filter_rows(const SelectStatement* select_statement, const uint32_t row_inde
                     has_conditions = (result < 0);
                     break;
                 default:
-                    return EXECUTE_FAIL;
+                    return -1;
             }
 
         }
