@@ -1,13 +1,13 @@
 #ifndef BINARY_PLUS_TREE_H
 #define BINARY_PLUS_TREE_H
 
-
 #define MAX_KEYS 3
+#include <stdint.h>
 
 typedef struct BPTreeNode {
     int is_leaf;
     int num_keys;
-    int keys[MAX_KEYS];
+    uint32_t keys[MAX_KEYS];
     void* pointers[MAX_KEYS + 1];
     struct BPTreeNode* next;
 }BPTreeNode;
@@ -17,11 +17,11 @@ typedef struct {
     int indexed_col;
 } BPTree;
 
-void* bpt_search(const BPTreeNode* root, int key);
+void* bpt_search_equals(const BPTreeNode* root, long int key);
+BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, int key);
 BPTreeNode* create_node(int is_leaf);
-void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, int key, BPTreeNode* right_child);
-void bpt_insert(BPTree* tree, int key, void* row_ptr);
-
+void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, uint32_t key, BPTreeNode* right_child);
+void bpt_insert(BPTree* tree, uint32_t key, void* row_ptr);
 void free_node(BPTreeNode* node);
 void free_tree(BPTree* tree);
 

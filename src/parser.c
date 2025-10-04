@@ -11,6 +11,7 @@
  * TODO: Apply both types of the INSERT INTO statements
  *  INSERT INTO table_name (column1, column2, column3, ...) VALUES (value1, value2, value3, ...);
  *  INSERT INTO table_name VALUES (value1, value2, value3, ...);
+ *  make two smaller functions to parse the two different options
  */
 PrepareResult parse_insert(Lexer* lexer, Statement* statement, Token token) {
     InsertStatement insert_statement;
@@ -125,13 +126,12 @@ PrepareResult parse_select(Lexer* lexer, Statement* statement, Token token) {
     return PREPARE_SUCCESS;
 }
 
-// TODO Refactor this function to reduce its Cognitive Complexity from 65 to the 25 allowed
 PrepareResult parse_create(Lexer* lexer, Statement* statement, const InputBuffer* input_buffer, Token token) {
 
     token = next_token(lexer);
 
     if (token.type == TOKEN_TABLE) {
-        CreateTableStatement create_statement;
+        CreateTableStatement create_statement = {0};
         create_statement.primary_col_index = -1;
 
         if (parse_create_table_name(lexer, &create_statement) != PARSE_SUCCESS)

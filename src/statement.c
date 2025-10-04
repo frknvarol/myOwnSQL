@@ -17,7 +17,7 @@ PrepareResult prepare_statement(const InputBuffer* input_buffer, Statement* stat
 
     Lexer lexer;
     init_lexer(&lexer, input_buffer->buffer);
-    Token token = next_token(&lexer);
+    const Token token = next_token(&lexer);
 
     switch (token.type) {
         case TOKEN_INSERT:
@@ -54,10 +54,10 @@ ExecuteResult execute_statement(const Statement* statement) {
         case STATEMENT_DELETE:
             return execute_delete(&statement->delete_stmt);
         case STATEMENT_CREATE_DATABASE:
-            printf("CREATE DATABASE (to be completed)\n");
+            printf("CREATE DATABASE (to be completed)\n"); // TODO
             return EXECUTE_SUCCESS;
         case STATEMENT_SHOW_DATABASES:
-            printf("SHOW DATABASES (to be completed)\n");
+            printf("SHOW DATABASES (to be completed)\n"); // TODO
             return EXECUTE_SUCCESS;
     }
     return EXECUTE_SUCCESS;
@@ -78,16 +78,17 @@ ExecuteResult execute_insert(const InsertStatement* insert_statement) {
 
     // TODO as i have not implemented a primary key attribute i will for now use the row number as the key for bpt
     //bpt_insert(table->tree, (int)table->primary_key_index, destination);
-
-    //int key = extract_primary_key(&table->schema, row_to_insert, table->primary_key_index);
-    //bpt_insert(table->tree, key, destination);
+    /*
+    if (table->primary_key_index >= 0) {
+        const uint32_t key = extract_primary_key(&table->schema, row_to_insert, table->primary_key_index);
+        bpt_insert(table->tree, key, destination);
+    }*/
 
 
     return EXECUTE_SUCCESS;
 }
 
-// TODO implement BPT search (first i have to get the lexer to do column search and where statements)
-// TODO Refactor this function to reduce its Cognitive Complexity from 46 to the 25 allowed.
+// TODO implement BPT search
 ExecuteResult execute_select(const SelectStatement* select_statement) {
     Table* table = find_table(&global_db, select_statement->table_name);
     TableSchema* schema = &table->schema;
@@ -127,12 +128,43 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         return EXECUTE_SUCCESS;
     }
 
+    // TODO
+    //  first check if the table has a primary key and the key is in the conditions
+    //  if so first gather the rows with bpt_search and then implement for loop search
+    //  to those rows that have been gathered by the bpt_search
+
+    if (table->primary_key_index >= 0) {
+        for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+            if (select_statement->conditions[condition_index].column_index == table->primary_key_index) {
+                if (select_statement->conditions[condition_index].type == TOKEN_EQUAL) {
+                    int32_t val;
+                    memcpy(&val, row.data + get_column_offset(schema, select_statement->conditions[condition_index].column_index), sizeof(int32_t));
+
+                    char *endptr;
+                    const char* value = select_statement->conditions[condition_index].value;
+
+                    const long int target = strtol(value, &endptr, 10);
+
+                    if (endptr == value || *endptr != '\0') continue;
+                    void* row_ptr = bpt_search_equals(table->tree->root, target);
+                    if (row_ptr == NULL) continue;
+                    if (*(uint8_t*)row_ptr) continue;
+
+                    deserialize_row(&table->schema, row_ptr, &row);
+                    const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
+                    if (has_conditions) print_row(&table->schema, &row, select_statement);
+                    printf("annen\n");
+                }
+            }
+        }
+    }
 
     for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
         void* row_ptr = row_slot(table, row_index);
         if (*(uint8_t*)row_ptr) continue;
 
-        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, row_index, table, row);
+        deserialize_row(&table->schema, row_slot(table, row_index), &row);
+        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
         if (has_conditions) print_row(&table->schema, &row, select_statement);
 
     }
@@ -202,7 +234,6 @@ ExecuteResult execute_show_tables() {
     return EXECUTE_SUCCESS;
 }
 
-// TODO Refactor this function to reduce its Cognitive Complexity from 30 to the 25 allowed.
 ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
     Table* table = find_table(&global_db, delete_statement->table_name);
     if (table == NULL) {
@@ -212,7 +243,6 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
     if (!row.data) {
-        free(row.data);
         return EXECUTE_FAIL;
     }
 
@@ -227,8 +257,8 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
             *(uint8_t*)row_ptr = 1; //deletes all of the rows if there is no condition
             continue;
         }
-
-        const int has_conditions = filter_rows(delete_statement->conditions, delete_statement->condition_count, row_index, table, row);
+        deserialize_row(&table->schema, row_slot(table, row_index), &row);
+        const int has_conditions = filter_rows(delete_statement->conditions, delete_statement->condition_count, table, row);
         switch (has_conditions) {
             case 1:
                 *(uint8_t*)row_ptr = 1;
@@ -327,9 +357,9 @@ void free_conditions(const uint32_t condition_count, const Condition* conditions
 }
 
 
-int filter_rows(const Condition* conditions, const uint32_t condition_count, const uint32_t row_index, Table* table, const Row row) {
+int filter_rows(const Condition* conditions, const uint32_t condition_count, Table* table, const Row row) {
 
-    deserialize_row(&table->schema, row_slot(table, row_index), &row);
+    //deserialize_row(&table->schema, row_slot(table, row_index), &row);
     int has_conditions = 1;
     const TableSchema* schema = &table->schema;
     for (uint32_t condition_index = 0; condition_index < condition_count; condition_index++) {

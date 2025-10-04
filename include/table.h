@@ -58,7 +58,7 @@ typedef struct {
     void* pages[TABLE_MAX_PAGES];
     uint32_t num_rows;
     BPTree* tree;
-    uint32_t primary_key_index;
+    int primary_key_index;
 } Table;
 
 
