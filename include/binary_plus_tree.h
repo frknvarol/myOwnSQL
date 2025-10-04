@@ -10,6 +10,7 @@ typedef struct BPTreeNode {
     uint32_t keys[MAX_KEYS];
     void* pointers[MAX_KEYS + 1];
     struct BPTreeNode* next;
+    struct BPTreeNode* previous;
 }BPTreeNode;
 
 typedef struct {
@@ -18,7 +19,7 @@ typedef struct {
 } BPTree;
 
 void* bpt_search_equals(const BPTreeNode* root, long int key);
-BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, int key);
+BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, long int key);
 BPTreeNode* create_node(int is_leaf);
 void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, uint32_t key, BPTreeNode* right_child);
 void bpt_insert(BPTree* tree, uint32_t key, void* row_ptr);

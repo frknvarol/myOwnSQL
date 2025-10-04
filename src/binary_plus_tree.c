@@ -1,7 +1,6 @@
 #include "binary_plus_tree.h"
 #include <stdlib.h>
-// TODO GIVES NULL EVEN THOUGH THE CONDITION APPLIES
-//  add the other operands besides equals
+// TODO GIVES NULL WHEN GIVEN THE SMALLEST KET (APPLIES FOR THE OTHER FUNCTION AS WELL)
 void* bpt_search_equals(const BPTreeNode* root, const long int key) {
     if (root == NULL) return NULL;
 
@@ -19,7 +18,7 @@ void* bpt_search_equals(const BPTreeNode* root, const long int key) {
     return NULL;
 }
 
-BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, const int key) {
+BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, const long int key) {
     if (root == NULL) return NULL;
 
     BPTreeNode* node = root;
@@ -41,6 +40,7 @@ BPTreeNode* create_node(const int is_leaf) {
     node->is_leaf = is_leaf;
     node->num_keys = 0;
     node->next = NULL;
+    node->previous = NULL;
     for (int i = 0; i < MAX_KEYS + 1; i++) {
         node->pointers[i] = NULL;
     }
@@ -133,6 +133,7 @@ void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
         node->num_keys = split;
 
         new_leaf->next = node->next;
+        new_leaf->previous = node;
         node->next = new_leaf;
 
         const uint32_t promoted_key = new_leaf->keys[0];
