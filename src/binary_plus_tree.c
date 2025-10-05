@@ -1,6 +1,6 @@
 #include "binary_plus_tree.h"
 #include <stdlib.h>
-// TODO GIVES NULL WHEN GIVEN THE SMALLEST KET (APPLIES FOR THE OTHER FUNCTION AS WELL)
+
 void* bpt_search_equals(const BPTreeNode* root, const long int key) {
     if (root == NULL) return NULL;
 
@@ -30,7 +30,7 @@ BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, const long int key) {
     }
 
     for (int i = 0; i < node->num_keys; i++) {
-        if (key == node->keys[i]) return node;
+        if (node->keys[i] >= key) return node;
     }
     return NULL;
 }
@@ -48,21 +48,21 @@ BPTreeNode* create_node(const int is_leaf) {
 }
 
 
-// TODO
-void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, const uint32_t key, BPTreeNode* right_child) {
-
+void bpt_insert_internal(BPTree* tree, BPTreeNode* parent, const uint32_t key, BPTreeNode* right_child) {
     int i = parent->num_keys - 1;
     while (i >= 0 && key < parent->keys[i]) {
-        parent->keys[i+1] = parent->keys[i];
-        parent->pointers[i+2] = parent->pointers[i+1];
+        parent->keys[i + 1] = parent->keys[i];
+        parent->pointers[i + 2] = parent->pointers[i + 1];
         i--;
     }
-    parent->keys[i+1] = key;
-    parent->pointers[i+2] = right_child;
+
+    parent->keys[i + 1] = key;
+    parent->pointers[i + 2] = right_child;
     parent->num_keys++;
 
     if (parent->num_keys > MAX_KEYS) {
-        const int split = (MAX_KEYS + 1) / 2;
+        const int split = parent->num_keys / 2;
+
         BPTreeNode* new_internal = create_node(0);
 
         const uint32_t mid_key = parent->keys[split];
@@ -72,6 +72,7 @@ void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, const uint32_t 
             new_internal->keys[j] = parent->keys[split + 1 + j];
             new_internal->pointers[j] = parent->pointers[split + 1 + j];
         }
+
         new_internal->pointers[new_internal->num_keys] = parent->pointers[parent->num_keys];
 
         parent->num_keys = split;
@@ -82,14 +83,14 @@ void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, const uint32_t 
             new_root->pointers[0] = parent;
             new_root->pointers[1] = new_internal;
             new_root->num_keys = 1;
+            tree->root = new_root;
+        } else {
+            bpt_insert_internal(tree, find_parent(tree->root, parent), mid_key, new_internal);
         }
     }
-
 }
 
-
 void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
-
     if (tree->root == NULL) {
         tree->root = create_node(1);
         tree->root->keys[0] = key;
@@ -100,7 +101,6 @@ void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
 
     BPTreeNode* node = tree->root;
     BPTreeNode* parent = NULL;
-
     while (!node->is_leaf) {
         parent = node;
         int index = 0;
@@ -114,17 +114,17 @@ void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
         node->pointers[i + 1] = node->pointers[i];
         i--;
     }
-    if (i < 0) return;
 
-    node->keys[i] = key;
-    node->pointers[i] = row_ptr;
+    node->keys[i + 1] = key;
+    node->pointers[i + 1] = row_ptr;
     node->num_keys++;
 
     if (node->num_keys > MAX_KEYS) {
-        const int split = (MAX_KEYS + 1) / 2;
+        const int split = node->num_keys / 2;
         BPTreeNode* new_leaf = create_node(1);
 
         new_leaf->num_keys = node->num_keys - split;
+
         for (int j = 0; j < new_leaf->num_keys; j++) {
             new_leaf->keys[j] = node->keys[split + j];
             new_leaf->pointers[j] = node->pointers[split + j];
@@ -133,6 +133,7 @@ void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
         node->num_keys = split;
 
         new_leaf->next = node->next;
+        if (new_leaf->next) new_leaf->next->previous = new_leaf;
         new_leaf->previous = node;
         node->next = new_leaf;
 
@@ -146,14 +147,30 @@ void bpt_insert(BPTree* tree, const uint32_t key, void* row_ptr) {
             new_root->num_keys = 1;
             tree->root = new_root;
         } else {
-            //insert the promoted key into parent
             bpt_insert_internal(tree, parent, promoted_key, new_leaf);
         }
-
-
     }
 
 }
+
+
+
+BPTreeNode* find_parent(BPTreeNode* root, BPTreeNode* child) {
+    if (root == NULL || root->is_leaf) return NULL;
+
+    for (int i = 0; i <= root->num_keys; i++) {
+        if ((BPTreeNode*)root->pointers[i] == child) return root;
+    }
+
+    for (int i = 0; i <= root->num_keys; i++) {
+        BPTreeNode* ptr = root->pointers[i];
+        if (!ptr) continue;
+        BPTreeNode* result = find_parent(ptr, child);
+        if (result) return result;
+    }
+    return NULL;
+}
+
 
 
 void free_node(BPTreeNode* node) {

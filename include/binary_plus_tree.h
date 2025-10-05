@@ -21,8 +21,9 @@ typedef struct {
 void* bpt_search_equals(const BPTreeNode* root, long int key);
 BPTreeNode* bpt_search_greater_equal(BPTreeNode* root, long int key);
 BPTreeNode* create_node(int is_leaf);
-void bpt_insert_internal(const BPTree* tree, BPTreeNode* parent, uint32_t key, BPTreeNode* right_child);
+void bpt_insert_internal(BPTree* tree, BPTreeNode* parent, uint32_t key, BPTreeNode* right_child);
 void bpt_insert(BPTree* tree, uint32_t key, void* row_ptr);
+BPTreeNode* find_parent(BPTreeNode* root, BPTreeNode* child);
 void free_node(BPTreeNode* node);
 void free_tree(BPTree* tree);
 

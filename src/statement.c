@@ -134,88 +134,15 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
     //  to those rows that have been gathered by the bpt_search
 
     if (table->primary_key_index >= 0) {
-        for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
-            if (select_statement->conditions[condition_index].column_index == table->primary_key_index) {
-                TokenType type = select_statement->conditions[condition_index].type;
-                if (type == TOKEN_EQUAL) {
-                    int32_t val;
-                    memcpy(&val, row.data + get_column_offset(schema, select_statement->conditions[condition_index].column_index), sizeof(int32_t));
-
-                    char *endptr;
-                    const char* value = select_statement->conditions[condition_index].value;
-
-                    const long int target = strtol(value, &endptr, 10);
-
-                    if (endptr == value || *endptr != '\0') continue;
-                    void* row_ptr = bpt_search_equals(table->tree->root, target);
-                    if (row_ptr == NULL) continue;
-                    if (*(uint8_t*)row_ptr) continue;
-
-                    deserialize_row(&table->schema, row_ptr, &row);
-                    const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
-                    if (has_conditions) print_row(&table->schema, &row, select_statement);
-                    return EXECUTE_SUCCESS;
-                }
-                if (type == TOKEN_GREATER || type == TOKEN_GREATER_EQUAL) {
-
-                    int32_t val;
-                    memcpy(&val, row.data + get_column_offset(schema, select_statement->conditions[condition_index].column_index), sizeof(int32_t));
-
-                    char *endptr;
-                    const char* value = select_statement->conditions[condition_index].value;
-
-                    const long int target = strtol(value, &endptr, 10);
-                    if (endptr == value || *endptr != '\0') continue;
-
-                    const BPTreeNode* node = bpt_search_greater_equal(table->tree->root, target);
-                    int index = -1;
-                    for (int i = 0; i < node->num_keys; i++) {
-                        if (node->keys[i] == target) {
-                            index = i;
-                        }
-                    }
-                    if (index == -1) return EXECUTE_FAIL;
-
-
-                    // TODO take the insides of these if statements and put them in their own functions
-                    //  so that these if block can be made into switch case
-                    /*
-                    if (type == TOKEN_GREATER_EQUAL) {
-                        if (node->pointers[index - 1] == NULL || *(uint8_t*)node->pointers[index - 1]) continue;
-                        deserialize_row(&table->schema, node->pointers[index - 1], &row);
-                        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
-                        if (has_conditions) print_row(&table->schema, &row, select_statement);
-                    }
-                    */
-
-
-                    while (index != node->num_keys) {
-                        if (node->pointers[index] == NULL || *(uint8_t*)node->pointers[index]) continue;
-                        deserialize_row(&table->schema, node->pointers[index], &row);
-                        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
-                        if (has_conditions) print_row(&table->schema, &row, select_statement);
-                        index++;
-                    }
-                    node = node->next;
-
-                    while (node != NULL) {
-                        for (int i = 0; i < node->num_keys; i++) {
-                            if (node->pointers[i] == NULL || *(uint8_t*)node->pointers[i]) continue;
-                            deserialize_row(&table->schema, node->pointers[i], &row);
-                            const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
-                            if (has_conditions) print_row(&table->schema, &row, select_statement);
-                        }
-                    node = node->next;
-
-                    }
-                    return EXECUTE_SUCCESS;
-
-
-
-                }
-            }
+        const ExecuteResult result = execute_bpt_search(select_statement, table, row);
+        switch (result) {
+            case EXECUTE_SUCCESS:
+                return EXECUTE_SUCCESS;
+            case EXECUTE_FAIL:
+                return EXECUTE_FAIL;
         }
     }
+
     else {
         for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
             void* row_ptr = row_slot(table, row_index);
@@ -416,9 +343,8 @@ void free_conditions(const uint32_t condition_count, const Condition* conditions
 }
 
 
-int filter_rows(const Condition* conditions, const uint32_t condition_count, Table* table, const Row row) {
+int filter_rows(const Condition* conditions, const uint32_t condition_count, const Table* table, const Row row) {
 
-    //deserialize_row(&table->schema, row_slot(table, row_index), &row);
     int has_conditions = 1;
     const TableSchema* schema = &table->schema;
     for (uint32_t condition_index = 0; condition_index < condition_count; condition_index++) {
@@ -487,4 +413,85 @@ int filter_rows(const Condition* conditions, const uint32_t condition_count, Tab
     }
 
     return has_conditions;
+}
+
+
+ExecuteResult execute_bpt_search(const SelectStatement* select_statement, const Table* table, const Row row) {
+    const TableSchema* schema = &table->schema;
+    for (uint32_t condition_index = 0; condition_index < select_statement->condition_count; condition_index++) {
+
+        if (select_statement->conditions[condition_index].column_index == table->primary_key_index) {
+
+            const TokenType type = select_statement->conditions[condition_index].type;
+
+            if (type == TOKEN_EQUAL) {
+                int32_t val;
+                memcpy(&val, row.data + get_column_offset(schema, select_statement->conditions[condition_index].column_index), sizeof(int32_t));
+
+                char *endptr;
+                const char* value = select_statement->conditions[condition_index].value;
+
+                const long int target = strtol(value, &endptr, 10);
+
+                if (endptr == value || *endptr != '\0') continue;
+                void* row_ptr = bpt_search_equals(table->tree->root, target);
+                if (row_ptr == NULL) continue;
+                if (*(uint8_t*)row_ptr) continue;
+
+                deserialize_row(&table->schema, row_ptr, &row);
+                const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
+                if (has_conditions) print_row(&table->schema, &row, select_statement);
+                return EXECUTE_SUCCESS;
+            }
+
+            if (type == TOKEN_GREATER || type == TOKEN_GREATER_EQUAL) {
+
+                int32_t val;
+                memcpy(&val, row.data + get_column_offset(schema, select_statement->conditions[condition_index].column_index), sizeof(int32_t));
+
+                char *endptr;
+                const char* value = select_statement->conditions[condition_index].value;
+
+                const long int target = strtol(value, &endptr, 10);
+                if (endptr == value || *endptr != '\0') continue;
+
+                const BPTreeNode* node = bpt_search_greater_equal(table->tree->root, target);
+                if (node == NULL) continue;
+                int index = -1;
+                for (int i = 0; i < node->num_keys; i++) {
+                    if (node->keys[i] == target) {
+                        index = i;
+                    }
+                }
+                if (index == -1) {
+                    free(row.data);
+                    return EXECUTE_FAIL;
+                }
+
+                while (index != node->num_keys) {
+                    if (node->pointers[index] == NULL || *(uint8_t*)node->pointers[index]) continue;
+                    deserialize_row(&table->schema, node->pointers[index], &row);
+                    const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
+                    if (has_conditions) print_row(&table->schema, &row, select_statement);
+                    index++;
+                }
+                node = node->next;
+
+                while (node != NULL) {
+                    for (int i = 0; i < node->num_keys; i++) {
+                        if (node->pointers[i] == NULL || *(uint8_t*)node->pointers[i]) continue;
+                        deserialize_row(&table->schema, node->pointers[i], &row);
+                        const int has_conditions = filter_rows(select_statement->conditions, select_statement->condition_count, table, row);
+                        if (has_conditions) print_row(&table->schema, &row, select_statement);
+                    }
+                    node = node->next;
+
+                }
+                return EXECUTE_SUCCESS;
+
+            }
+        }
+    }
+
+    return EXECUTE_SUCCESS;
 }
