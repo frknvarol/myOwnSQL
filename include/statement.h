@@ -108,7 +108,12 @@ const char* find_close_parenthesis(const char* open_parenthesis);
 void free_statement(const Statement* statement);
 void free_conditions(uint32_t condition_count, const Condition* conditions);
 int filter_rows(const Condition* conditions, uint32_t condition_count, const Table* table, Row row);
+uint32_t get_primary_condition_index(const SelectStatement* select_statement, const Table* table);
+long parse_target_value(const char* value, int* ok);
+void print_matching_row(const TableSchema* schema, const SelectStatement* stmt, const Table* table, const Row* row, void* row_ptr);
+ExecuteResult process_equal_condition(const SelectStatement* stmt, const Table* table, const Row* row, long target);
+ExecuteResult process_greater_condition(const SelectStatement* stmt, const Table* table, const Row* row, long target, int inclusive);
 ExecuteResult execute_bpt_search(const SelectStatement* select_statement, const Table* table, Row row);
-
+void print_select_header(const SelectStatement* select_statement, const TableSchema* schema) ;
 
 #endif

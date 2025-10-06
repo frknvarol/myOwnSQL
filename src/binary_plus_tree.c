@@ -1,4 +1,6 @@
 #include "binary_plus_tree.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 
 void* bpt_search_equals(const BPTreeNode* root, const long int key) {
@@ -48,44 +50,44 @@ BPTreeNode* create_node(const int is_leaf) {
 }
 
 
-void bpt_insert_internal(BPTree* tree, BPTreeNode* parent, const uint32_t key, BPTreeNode* right_child) {
-    int i = parent->num_keys - 1;
-    while (i >= 0 && key < parent->keys[i]) {
-        parent->keys[i + 1] = parent->keys[i];
-        parent->pointers[i + 2] = parent->pointers[i + 1];
+void bpt_insert_internal(BPTree* tree, BPTreeNode* node, const uint32_t key, BPTreeNode* right_child) {
+    int i = node->num_keys - 1;
+    while (i >= 0 && key < node->keys[i]) {
+        node->keys[i + 1] = node->keys[i];
+        node->pointers[i + 2] = node->pointers[i + 1];
         i--;
     }
 
-    parent->keys[i + 1] = key;
-    parent->pointers[i + 2] = right_child;
-    parent->num_keys++;
+    node->keys[i + 1] = key;
+    node->pointers[i + 2] = right_child;
+    node->num_keys++;
 
-    if (parent->num_keys > MAX_KEYS) {
-        const int split = parent->num_keys / 2;
+    if (node->num_keys > MAX_KEYS) {
+        const int split = node->num_keys / 2;
 
         BPTreeNode* new_internal = create_node(0);
 
-        const uint32_t mid_key = parent->keys[split];
+        const uint32_t mid_key = node->keys[split];
 
-        new_internal->num_keys = parent->num_keys - split - 1;
+        new_internal->num_keys = node->num_keys - split - 1;
         for (int j = 0; j < new_internal->num_keys; j++) {
-            new_internal->keys[j] = parent->keys[split + 1 + j];
-            new_internal->pointers[j] = parent->pointers[split + 1 + j];
+            new_internal->keys[j] = node->keys[split + 1 + j];
+            new_internal->pointers[j] = node->pointers[split + 1 + j];
         }
 
-        new_internal->pointers[new_internal->num_keys] = parent->pointers[parent->num_keys];
+        new_internal->pointers[new_internal->num_keys] = node->pointers[node->num_keys];
 
-        parent->num_keys = split;
+        node->num_keys = split;
 
-        if (parent == tree->root) {
+        if (node == tree->root) {
             BPTreeNode* new_root = create_node(0);
             new_root->keys[0] = mid_key;
-            new_root->pointers[0] = parent;
+            new_root->pointers[0] = node;
             new_root->pointers[1] = new_internal;
             new_root->num_keys = 1;
             tree->root = new_root;
         } else {
-            bpt_insert_internal(tree, find_parent(tree->root, parent), mid_key, new_internal);
+            bpt_insert_internal(tree, find_parent(tree->root, node), mid_key, new_internal);
         }
     }
 }
