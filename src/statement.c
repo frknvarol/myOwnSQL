@@ -114,8 +114,10 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         const ExecuteResult result = execute_bpt_search(select_statement, table, row);
         switch (result) {
             case EXECUTE_SUCCESS:
+                free(row.data);
                 return EXECUTE_SUCCESS;
             case EXECUTE_FAIL:
+                free(row.data);
                 return EXECUTE_FAIL;
         }
     }
@@ -129,8 +131,6 @@ ExecuteResult execute_select(const SelectStatement* select_statement) {
         if (has_conditions) print_row(&table->schema, &row, select_statement);
 
     }
-
-
     free(row.data);
     return EXECUTE_SUCCESS;
 
@@ -162,8 +162,7 @@ ExecuteResult execute_create_table(const CreateTableStatement* create_statement)
         return EXECUTE_FAIL;
     }
 
-    printf("Table %s created with %d columns.\n",
-           new_table->name, new_table->schema.num_columns);
+    printf("Table %s created with %d columns.\n", new_table->name, new_table->schema.num_columns);
     return EXECUTE_SUCCESS;
 }
 
@@ -204,9 +203,8 @@ ExecuteResult execute_delete(const DeleteStatement* delete_statement) {
 
     Row row;
     row.data = malloc(compute_row_size(&table->schema));
-    if (!row.data) {
-        return EXECUTE_FAIL;
-    }
+    if (!row.data) return EXECUTE_FAIL;
+
 
 
     for (uint32_t row_index = 0; row_index < table->num_rows; row_index++) {
